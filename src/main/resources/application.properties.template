@@ -1,0 +1,9 @@
+spring.application.name=workis
+
+spring.datasource.url=jdbc:postgresql://localhost:5432/workis
+spring.datasource.username=postgres
+spring.datasource.password=password
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.open-in-view=false
+jwt.secret=your-super-long-secret-key-change-this
+jwt.expiration=86400000
