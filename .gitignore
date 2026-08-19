@@ -1,6 +1,12 @@
-HELP.md
-.gradle
-build/
+# Gradle
+.gradle/
+backend/.gradle/
+backend/build/
+
+# Local application configuration
+backend/src/main/resources/application.properties
+
+# Keep Gradle wrapper
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -18,7 +24,7 @@ bin/
 !**/src/test/**/bin/
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -35,3 +41,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### macOS ###
+.DS_Store
