@@ -1,24 +1,32 @@
 package com.example.logis.services;
 
+import com.example.logis.data.CompanyInvitation;
+import com.example.logis.data.InvitationStatus;
 import com.example.logis.data.User;
-import com.example.logis.dtos.CreateUserRequest;
-import com.example.logis.dtos.LoginRequest;
-import com.example.logis.dtos.LoginResponse;
+import com.example.logis.dtos.*;
 import com.example.logis.exceptions.EmailAlreadyExistsException;
 import com.example.logis.exceptions.InvalidCredentialsException;
+import com.example.logis.exceptions.InvalidInvitationException;
+import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 @Service
 public class AuthService {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final InviteService inviteService;
+    private final CompanyService companyService;
 
-    public AuthService(UserService userService, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(UserService userService, InviteService inviteService, PasswordEncoder passwordEncoder, JwtService jwtService, CompanyService companyService) {
         this.userService = userService;
+        this.inviteService = inviteService;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.companyService = companyService;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -49,6 +57,48 @@ public class AuthService {
         User savedUser = userService.saveUser(user);
 
         String token = jwtService.generateToken(savedUser);
+        return new LoginResponse(token);
+    }
+
+    @Transactional
+    public LoginResponse register(CreateInvitedUserRequest request) {
+
+        CompanyInvitation invitation = inviteService.findByToken(request.token());
+
+        String email = invitation.getEmail().trim().toLowerCase();
+
+        if (invitation.getInvitationStatus() != InvitationStatus.PENDING) {
+            throw new InvalidInvitationException("This invitation is no longer valid.");
+        }
+
+        if (invitation.getExpiresAt().isBefore(LocalDateTime.now())) {
+            invitation.setInvitationStatus(InvitationStatus.EXPIRED);
+            throw new InvalidInvitationException("This invitation has expired.");
+        }
+
+        if (userService.existsByEmail(email)) {
+            throw new EmailAlreadyExistsException("User with the email " + email + " already exists.");
+        }
+
+        User user = new User(
+                request.name().trim(),
+                request.lastname().trim(),
+                request.username().trim(),
+                email,
+                passwordEncoder.encode(request.password())
+        );
+
+        User savedUser = userService.saveUser(user);
+
+        companyService.addUserToCompany(
+                new AddUserToCompanyRequest(savedUser.getId(), false),
+                invitation.getCompany().getId()
+        );
+
+        invitation.setInvitationStatus(InvitationStatus.ACCEPTED);
+
+        String token = jwtService.generateToken(savedUser);
+
         return new LoginResponse(token);
     }
 }

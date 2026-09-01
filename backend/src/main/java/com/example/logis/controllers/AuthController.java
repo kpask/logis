@@ -1,5 +1,6 @@
 package com.example.logis.controllers;
 
+import com.example.logis.dtos.CreateInvitedUserRequest;
 import com.example.logis.dtos.CreateUserRequest;
 import com.example.logis.dtos.LoginRequest;
 import com.example.logis.dtos.LoginResponse;
@@ -26,6 +27,11 @@ public class AuthController {
 
     @PostMapping("/register")
     public LoginResponse register(@Valid @RequestBody CreateUserRequest request) {
+        return authService.register(request);
+    }
+
+    @PostMapping("register/invitation/")
+    public LoginResponse registerWithInvitation(@Valid @RequestBody CreateInvitedUserRequest request){
         return authService.register(request);
     }
 }

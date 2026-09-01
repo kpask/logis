@@ -1,9 +1,13 @@
 package com.example.logis.controllers;
 
 import com.example.logis.data.User;
+import com.example.logis.dtos.CreateTimeEntryRequest;
 import com.example.logis.dtos.TimeEntryResponse;
+import com.example.logis.dtos.UpdateTimeEntryRequest;
 import com.example.logis.services.TimeTrackingService;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,12 +34,44 @@ public class TimeTrackingController {
         return timeTrackingService.stopTimeEntry(id, user);
     }
 
+    @GetMapping("/projects/{projectId}/time-entries")
+    public List<TimeEntryResponse> getTimeEntriesForProject(@PathVariable long projectId, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return timeTrackingService.getProjectTimeEntries(projectId, user);
+    }
+
+    @GetMapping("/workplaces/{workplaceId}/time-entries")
+    public List<TimeEntryResponse> getTimeEntriesForWorkplace(@PathVariable long workplaceId, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return timeTrackingService.getWorkplaceTimeEntries(workplaceId, user);
+    }
+
+
+    @PostMapping("/projects/{projectId}/time-entries")
+    public TimeEntryResponse createTimeEntryForProject(@PathVariable long projectId, @RequestBody @Valid CreateTimeEntryRequest request, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return timeTrackingService.createTimeEntryForProject(projectId, request, user);
+    }
+
+    @PutMapping("/time-entries/{id}")
+    public TimeEntryResponse editTimeEntry(@PathVariable long id, @RequestBody @Valid UpdateTimeEntryRequest request, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return timeTrackingService.updateTimeEntry(id, request, user);
+    }
+
+    @DeleteMapping("/time-entries/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTimeEntry(@PathVariable long id, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        timeTrackingService.deleteTimeEntry(id, user);
+    }
+
     @GetMapping("/me/time-entries")
     public List<TimeEntryResponse> getMyTimeEntries(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             Authentication authentication){
         User user = (User) authentication.getPrincipal();
-        return timeTrackingService.getUserTimeEntries(user.getId(), null, from, to);
+        return timeTrackingService.getUserTimeEntries(user.getId(), from, to);
     }
 }

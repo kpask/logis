@@ -1,14 +1,18 @@
 package com.example.logis.services;
 
 import com.example.logis.data.Company;
+import com.example.logis.data.CompanyRole;
 import com.example.logis.data.User;
 import com.example.logis.dtos.*;
 import com.example.logis.exceptions.CompanyNotFoundException;
+import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.UserNotFoundException;
 import com.example.logis.repository.CompanyRepository;
 import com.example.logis.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class CompanyService {
@@ -47,6 +51,9 @@ public class CompanyService {
         user.setCompany(company);
         if(request.manager()){
             company.getManagers().add(user);
+            user.setRole(CompanyRole.MANAGER);
+        } else {
+            user.setRole(CompanyRole.USER);
         }
     }
 
@@ -62,12 +69,14 @@ public class CompanyService {
 
         newManager.setCompany(company);
         company.getManagers().add(newManager);
+        newManager.setRole(CompanyRole.MANAGER);
     }
 
     @Transactional
     public CompanyResponse createCompany(CreateCompanyRequest request, User manager) {
         Company savedCompany = companyRepository.save(new Company(request.name(), manager));
         manager.setCompany(savedCompany);
+        manager.setRole(CompanyRole.MANAGER);
         userRepository.save(manager);
         return new CompanyResponse(
                 savedCompany.getId(),
@@ -78,5 +87,15 @@ public class CompanyService {
     public int getWorkerCount(long companyId){
         findCompany(companyId);
         return userRepository.countByCompanyId(companyId);
+    }
+
+    public List<UserResponse> getMembers(long companyId, User requester) {
+        Company company = findCompany(companyId);
+        if (requester.getCompany() == null || !requester.getCompany().getId().equals(company.getId())) {
+            throw new ForbiddenActionException("You can only view members of your own company.");
+        }
+        return userRepository.findByCompanyId(companyId).stream()
+                .map(userService::toResponse)
+                .toList();
     }
 }

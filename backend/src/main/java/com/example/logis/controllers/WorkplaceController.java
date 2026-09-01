@@ -3,6 +3,7 @@ package com.example.logis.controllers;
 import com.example.logis.data.User;
 import com.example.logis.dtos.CreateWorkplaceRequest;
 import com.example.logis.dtos.ProjectResponse;
+import com.example.logis.dtos.UserResponse;
 import com.example.logis.dtos.WorkplaceResponse;
 import com.example.logis.services.ProjectService;
 import com.example.logis.services.WorkplaceService;
@@ -30,24 +31,28 @@ public class WorkplaceController {
         return workplaceService.createWorkplace(request, creator);
     }
 
-    @GetMapping("/companies/{id}/workplaces")
-    public List<WorkplaceResponse> getCompanyWorkplaces(@PathVariable long id){
-        return workplaceService.getWorkplaces(id);
+    @GetMapping("/workplaces")
+    public List<WorkplaceResponse> getCompanyWorkplaces(Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return workplaceService.getWorkplacesByUser(user);
     }
 
     @GetMapping("/workplaces/{id}")
-    public WorkplaceResponse getWorkplace(@PathVariable long id){
-        return workplaceService.getWorkplace(id);
+    public WorkplaceResponse getWorkplace(@PathVariable long id, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return workplaceService.getWorkplaceByWorkplaceIdAndUser(id, user);
     }
 
     @GetMapping("/workplaces/{id}/projects")
-    public List<ProjectResponse> getWorkplaceProjects(@PathVariable long id){
-        return projectService.getWorkplaceProjects(id);
+    public List<ProjectResponse> getWorkplaceProjects(@PathVariable long id, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        return projectService.getWorkplaceProjectsByWorkplaceIdAndUser(id, user);
     }
 
     @DeleteMapping("/workplaces/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteWorkplace(@PathVariable long id){
-        workplaceService.deleteWorkplace(id);
+    public void deleteWorkplace(@PathVariable Long id, Authentication authentication){
+        User user = (User) authentication.getPrincipal();
+        workplaceService.deleteWorkplaceByWorkplaceIdAndUser(id, user);
     }
 }

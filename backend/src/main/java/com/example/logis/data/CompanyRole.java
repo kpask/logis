@@ -1,6 +1,6 @@
 package com.example.logis.data;
 
-public enum GlobalRole {
+public enum CompanyRole {
     USER,
-    ADMIN
+    MANAGER
 }

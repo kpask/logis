@@ -19,12 +19,15 @@ public class Project {
     private Workplace workplace;
     @OneToMany(mappedBy = "project")
     private List<ProjectWorker> projectWorkers = new ArrayList<>();
+    @Enumerated(EnumType.STRING)
+    private ProjectStatus projectStatus = ProjectStatus.ON_HOLD;
 
     public Project(){}
     public Project(String projectName, Workplace workplace, LocalDate startDate){
         this.projectName = projectName;
         this.workplace = workplace;
         this.startDate = startDate;
+        projectStatus = startDate.isBefore(LocalDate.now()) ? ProjectStatus.ACTIVE : ProjectStatus.PENDING;
     }
 
     public Project(String projectName, Workplace workplace, LocalDate startDate, LocalDate deadline){
@@ -32,6 +35,7 @@ public class Project {
         this.workplace = workplace;
         this.startDate = startDate;
         this.deadline = deadline;
+        projectStatus = startDate.isBefore(LocalDate.now()) ? ProjectStatus.ACTIVE : ProjectStatus.PENDING;
     }
 
     public Project(String projectName, Workplace workplace){
@@ -82,5 +86,17 @@ public class Project {
 
     public void setProjectWorkers(List<ProjectWorker> projectWorkers) {
         this.projectWorkers = projectWorkers;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public ProjectStatus getProjectStatus() {
+        return projectStatus;
+    }
+
+    public void setProjectStatus(ProjectStatus projectStatus) {
+        this.projectStatus = projectStatus;
     }
 }

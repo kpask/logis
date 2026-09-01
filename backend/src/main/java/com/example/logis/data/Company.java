@@ -18,6 +18,9 @@ public class Company {
     private List<User> users = new ArrayList<User>();
     @OneToMany(mappedBy = "company")
     private List<Workplace> workplaces = new ArrayList<Workplace>();
+    @OneToMany
+    private final List<CompanyInvitation> invitations = new ArrayList<>();
+
 
     public Company(String name, List<User> managers, List<User> users){
         this.name = name;
@@ -63,5 +66,9 @@ public class Company {
 
     public void setWorkplaces(List<Workplace> workplaces) {
         this.workplaces = workplaces;
+    }
+
+    public List<CompanyInvitation> getInvitations() {
+        return invitations;
     }
 }

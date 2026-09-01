@@ -1,13 +1,13 @@
 package com.example.logis.dtos;
 
-import java.time.Duration;
 import java.time.Instant;
 
 public record TimeEntryResponse(
         Long id,
         Long projectWorkerId,
+        Long workerId,
         Long projectId,
         Instant startTime,
         Instant endTime,
-        Duration duration
+        long duration
 ) {}

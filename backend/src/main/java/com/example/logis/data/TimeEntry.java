@@ -13,9 +13,18 @@ public class TimeEntry {
     private Instant startTime;
     private Instant endTime;
 
-    public TimeEntry(ProjectWorker projectWorker){
+    public TimeEntry(ProjectWorker projectWorker) {
+        this(projectWorker, Instant.now(), null);
+    }
+
+    public TimeEntry(ProjectWorker projectWorker, Instant startTime) {
+        this(projectWorker, startTime, null);
+    }
+
+    public TimeEntry(ProjectWorker projectWorker, Instant startTime, Instant endTime) {
         this.projectWorker = projectWorker;
-        this.startTime = Instant.now();
+        this.startTime = startTime;
+        this.endTime = endTime;
     }
 
     protected TimeEntry() {

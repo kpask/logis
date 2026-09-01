@@ -16,7 +16,12 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-    // ── Internal (entity) methods — used by other services ──────────────
+
+    public void inviteUser(Long userId, Long inviterId){
+        User invited = findUser(userId);
+        User inviter = findUser(inviterId);
+
+    }
 
     public User findUser(Long id){
         if(id < 1){
@@ -45,13 +50,16 @@ public class UserService {
     // ── API (DTO) methods — used by controllers ─────────────────────────
 
     public UserResponse getUser(Long id){
-        User user = findUser(id);
+        return toResponse(findUser(id));
+    }
+
+    public UserResponse toResponse(User user){
         return new UserResponse(
                 user.getId(),
-                user.getUsername(),
-                user.getEmail(),
                 user.getName(),
                 user.getLastname(),
+                user.getUsername(),
+                user.getEmail(),
                 user.getRole(),
                 user.getCompany() != null ? user.getCompany().getId() : null
         );

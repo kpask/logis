@@ -1,6 +1,6 @@
 package com.example.logis.dtos;
 
-import com.example.logis.data.GlobalRole;
+import com.example.logis.data.CompanyRole;
 
 public record UserResponse (
         Long id,
@@ -8,6 +8,6 @@ public record UserResponse (
         String lastname,
         String username,
         String email,
-        GlobalRole globalRole,
+        CompanyRole companyRole,
         Long companyId
 ){}

@@ -14,7 +14,9 @@ public class ProjectWorker {
     private User worker;
     @ManyToOne
     private Project project;
-    private LocalDate startDate;
+    private LocalDate assignedAt;
+    private LocalDate endDate;
+
     @OneToMany
     private List<TimeEntry> timeEntries;
 
@@ -22,6 +24,7 @@ public class ProjectWorker {
     public ProjectWorker(User worker, Project project){
         this.worker = worker;
         this.project = project;
+        this.assignedAt = LocalDate.now();
     }
 
     public Long getId() {
@@ -44,11 +47,23 @@ public class ProjectWorker {
         this.project = project;
     }
 
-    public LocalDate getStartDate() {
-        return startDate;
+    public LocalDate getAssignedAt() {
+        return assignedAt;
     }
 
-    public void setStartDate(LocalDate startDate) {
-        this.startDate = startDate;
+    public void setAssignedAt(LocalDate assignedAt) {
+        this.assignedAt = assignedAt;
+    }
+
+    public LocalDate getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+    }
+
+    public List<TimeEntry> getTimeEntries() {
+        return timeEntries;
     }
 }

@@ -9,7 +9,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Enumerated(EnumType.STRING)
-    private GlobalRole globalRole = GlobalRole.USER;
+    private CompanyRole companyRole = CompanyRole.USER;
     @ManyToOne
     private Company company;
 
@@ -20,13 +20,13 @@ public class User {
     private String passwordHash;
 
     public User(){}
-    public User(String name, String lastname, String username, String email, String passwordHash, GlobalRole globalRole){
+    public User(String name, String lastname, String username, String email, String passwordHash, CompanyRole companyRole){
         this.name = name;
         this.lastname = lastname;
         this.username = username;
         this.email = email;
         this.passwordHash = passwordHash;
-        this.globalRole = globalRole;
+        this.companyRole = companyRole;
     }
 
     public User(String name, String lastname, String username, String email, String passwordHash, Company company){
@@ -50,12 +50,15 @@ public class User {
         return id;
     }
 
-    public GlobalRole getRole() {
-        return globalRole;
+    public CompanyRole getRole() {
+        if(companyRole == null){
+            companyRole = CompanyRole.USER;
+        }
+        return companyRole;
     }
 
-    public void setRole(GlobalRole globalRole) {
-        this.globalRole = globalRole;
+    public void setRole(CompanyRole companyRole) {
+        this.companyRole = companyRole;
     }
 
     public String getEmail() {
