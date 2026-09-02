@@ -1,5 +1,5 @@
 // ============================================================
-// Workis — Shared TypeScript types
+// Logis — Shared TypeScript types
 // Mirrors the backend DTOs.
 // ============================================================
 

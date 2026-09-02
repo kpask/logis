@@ -577,7 +577,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                   </div>
                   <div className="muted small">{worker.email}</div>
                 </div>
-                {isManager && (
+                {isManager && worker.id !== user?.id && (
                   <button
                     className="btn btn-danger btn-sm"
                     style={{ marginLeft: "auto" }}
@@ -629,7 +629,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         </div>
 
         {/* Right column: calendar */}
-        <div className="card">
+        <div className="card calendar-card">
           {isManager && (
             <div style={{ marginBottom: 12 }}>
               {/* Active workers plus removed workers who still have entries. */}
@@ -695,7 +695,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
       ) : (
         <div
           className="card"
-          style={{ padding: 0, overflow: "hidden", marginBottom: 24 }}
+          style={{ padding: 0, overflowX: "auto", marginBottom: 24 }}
         >
           <table className="table">
             <thead>

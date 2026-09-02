@@ -69,6 +69,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent iOS from auto-resizing text which can cause zoom on inputs */
+  -webkit-text-size-adjust: 100%;
 }
 
 #root {
@@ -412,6 +414,8 @@ a {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  /* Prevent columns from becoming too narrow; allow horizontal scroll on small screens */
+  min-width: 640px;
 }
 
 .table th {
@@ -884,8 +888,21 @@ a {
    ============================================================ */
 
 @media (max-width: 768px) {
+  /* Make the sidebar an off-canvas drawer on small screens */
   .sidebar {
-    display: none;
+    display: block; /* visible when toggled */
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: var(--sidebar-width);
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 60;
+    padding: var(--space-5);
+    overflow-y: auto;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
   }
 
   .grid-2,
@@ -900,6 +917,53 @@ a {
 
   .topbar-user-name {
     display: none;
+  }
+
+  /* When the layout has the sidebar-open class, slide it in */
+  .app-layout.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Dark overlay behind mobile drawer */
+  .mobile-sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 50;
+  }
+  .app-layout.sidebar-open .mobile-sidebar-overlay {
+    display: block;
+  }
+
+  /* show hamburger in topbar */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    padding: 6px;
+    margin: 0;
+    cursor: pointer;
+    color: var(--color-text-muted);
+  }
+}
+
+/* Small-screen mobile tweaks: ensure form controls are large enough to avoid iOS auto-zoom */
+@media (max-width: 480px) {
+  /* Increase tap-target fonts to prevent Safari from zooming when focusing inputs */
+  .form-input,
+  input,
+  textarea,
+  select,
+  .btn {
+    font-size: 16px; /* iOS zoom threshold */
+  }
+
+  /* Slightly larger buttons/padding for touch targets */
+  .btn {
+    padding: 10px 16px;
   }
 }
 
@@ -920,6 +984,15 @@ a {
   font-size: 15px;
   color: var(--color-text);
   text-align: center;
+}
+
+/* Constrains the calendar card so it never stretches giant on wide
+   screens — the header (Prev/Next) and grid stay flush within 700px,
+   with no side padding and no button drift. */
+.calendar-card {
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .calendar-grid {
@@ -1031,14 +1104,17 @@ a {
 }
 
 .legend-dot.worked {
-  background: #4ade80;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
 }
 
 .legend-dot.nonwork {
-  background: #f87171;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
 }
 
 .legend-dot.selected {
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.4);
   background: var(--color-primary);
 }
 
@@ -1077,4 +1153,184 @@ a {
 .map-coords {
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+/* ============================================================
+   Dark Mode — System/Browser preference
+   ============================================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #a33728;
+    --color-primary-hover: #818cf8;
+    --color-primary-soft: #1e293b;
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-border: #334155;
+    --color-border-strong: #475569;
+    --color-text: #f1f5f9;
+    --color-text-muted: #94a3b8;
+    --color-text-faint: #64748b;
+    --color-danger: #ef4444;
+    --color-danger-soft: #1c1017;
+    --color-success: #22c55e;
+    --color-success-soft: #0c1f13;
+    --color-warning: #f59e0b;
+    --color-warning-soft: #1f1708;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4),
+      0 2px 4px -2px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5),
+      0 4px 6px -4px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Button hovers that use hardcoded light colors */
+  .btn-secondary:hover:not(:disabled) {
+    background: #2d3a4f;
+    border-color: var(--color-border-strong);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: #2d3a4f;
+    color: var(--color-text);
+  }
+
+  /* Form input disabled state */
+  .form-input:disabled {
+    background: #2d3a4f;
+    color: var(--color-text-faint);
+  }
+
+  /* Badge base + muted */
+  .badge {
+    background: #2d3a4f;
+    color: var(--color-text-muted);
+  }
+
+  .badge-muted {
+    background: #2d3a4f;
+    color: var(--color-text-muted);
+  }
+
+  /* Empty state icon bg */
+  .empty-state-icon {
+    background: #2d3a4f;
+    color: var(--color-text-muted);
+  }
+
+  /* Alert colors */
+  .alert-error {
+    border-color: #7f1d1d;
+    background: var(--color-danger-soft);
+    color: #fca5a5;
+  }
+
+  .alert-success {
+    border-color: #14532d;
+    background: var(--color-success-soft);
+    color: #86efac;
+  }
+
+  .alert-warning {
+    border-color: #78350f;
+    background: var(--color-warning-soft);
+    color: #fcd34d;
+  }
+
+  /* Table header + row hovers */
+  .table th {
+    background: #1a2332;
+  }
+
+  .table tbody tr:hover {
+    background: #1a2332;
+  }
+
+  /* Modal overlay */
+  .modal-overlay {
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  /* Sidebar + topbar hovers */
+  .sidebar-nav-item:hover {
+    background: #2d3a4f;
+    color: var(--color-text);
+  }
+
+  .sidebar-footer-user:hover {
+    background: #2d3a4f;
+  }
+
+  .topbar-user:hover {
+    background: #2d3a4f;
+  }
+
+  /* Calendar cell hovers + outside */
+  .calendar-cell:hover {
+    border-color: var(--color-border-strong);
+    background: #2d3a4f;
+  }
+
+  .calendar-cell.outside {
+    color: var(--color-text-faint);
+    background: #1a2332;
+  }
+
+  /* Non-work days in dark mode */
+  .calendar-cell.nonwork {
+    background: #3b1717;
+    color: #f87171;
+    border-color: #5c1f1f;
+  }
+
+  .calendar-cell.nonwork:hover {
+    background: #5c1f1f;
+    border-color: #7f1d1d;
+  }
+
+  .calendar-cell.nonwork.outside {
+    background: #2d0f0f;
+    color: var(--color-text-faint);
+    border-color: #2d0f0f;
+  }
+
+  /* Worked days in dark mode */
+  .calendar-cell.worked {
+    background: #14532d66;
+    color: #86efac;
+    border-color: #166534;
+  }
+
+  .calendar-cell.worked:hover {
+    background: #166534;
+    border-color: #22c55e;
+  }
+
+  .calendar-cell.worked.outside {
+    background: var(--color-success-soft);
+    color: #4ade80;
+    border-color: var(--color-success-soft);
+  }
+
+  /* Selected calendar cell */
+  .calendar-cell.selected {
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.5);
+  }
+
+  /* Dark mode legend dots */
+  .legend-dot.worked {
+    background: #86efac;
+    border: 1px solid #22c55e;
+  }
+
+  .legend-dot.nonwork {
+    background: #f87171;
+    border: 1px solid #ef4444;
+  }
+
+  .legend-dot.selected {
+    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.7);
+    background: #818cf8;
+  }
 }

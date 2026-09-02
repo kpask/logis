@@ -60,8 +60,8 @@ export default function SignupPage({
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <div className="auth-logo-icon">W</div>
-          <div className="auth-logo-text">Workis</div>
+         <div className="auth-logo-icon">L</div>
+         <div className="auth-logo-text">Logis</div>
         </div>
 
         <h1 className="auth-title">Create your account</h1>

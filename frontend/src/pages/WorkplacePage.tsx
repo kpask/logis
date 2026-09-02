@@ -344,7 +344,7 @@ export default function WorkplacePage({
           />
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="card" style={{ padding: 0, overflowX: "auto" }}>
           <table className="table">
             <thead>
               <tr>
@@ -380,104 +380,108 @@ export default function WorkplacePage({
 
       <h2 style={{ marginBottom: 16 }}>Time tracking</h2>
 
-      <div className="card" style={{ marginBottom: 24 }}>
-        {isManager && (
-          <div style={{ marginBottom: 12 }}>
-            <MemberSelect
-              members={members}
-              value={selectedMember}
-              onChange={setSelectedMember}
-            />
-          </div>
-        )}
+      <div className="grid-2" style={{ alignItems: "start" }}>
+        <div className="card calendar-card" style={{ marginBottom: 24 }}>
+          {isManager && (
+            <div style={{ marginBottom: 12 }}>
+              <MemberSelect
+                members={members}
+                value={selectedMember}
+                onChange={setSelectedMember}
+              />
+            </div>
+          )}
 
-        <MonthCalendar
-          viewYear={viewYear}
-          viewMonth={viewMonth}
-          onPrevMonth={goToPrevMonth}
-          onNextMonth={goToNextMonth}
-          workedDays={workedDays}
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-          monthTotalSeconds={monthTotalSeconds}
-        />
-      </div>
-
-      {/* Selected day entries */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
-        <h2 style={{ margin: 0 }}>{formatMonthDay(selectedDate)}</h2>
-        {selectedEntries.length > 0 && (
-          <span className="badge badge-primary">
-            {formatDurationHuman(selectedTotalSeconds)} logged
-          </span>
-        )}
-      </div>
-
-      {selectedEntries.length === 0 ? (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <EmptyState
-            icon={<IconClock />}
-            title="No time logged on this day."
-            description="Click any worked day in the calendar to see its entries across this workplace's projects."
+          <MonthCalendar
+            viewYear={viewYear}
+            viewMonth={viewMonth}
+            onPrevMonth={goToPrevMonth}
+            onNextMonth={goToNextMonth}
+            workedDays={workedDays}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            monthTotalSeconds={monthTotalSeconds}
           />
         </div>
-      ) : (
-        <div
-          className="card"
-          style={{ padding: 0, overflow: "hidden", marginBottom: 24 }}
-        >
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Start</th>
-                <th>End</th>
-                <th>Duration</th>
-                <th>Project</th>
-                {showWorkerColumn && <th>Worker</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {selectedEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>{formatTime(entry.startTime)}</td>
-                  <td>{formatTime(entry.endTime)}</td>
-                  <td style={{ fontWeight: 500 }}>
-                    {formatDuration(durationToSeconds(entry.duration))}
-                  </td>
-                  <td className="muted">
-                    {projectNameById.get(entry.projectId) ?? "—"}
-                  </td>
-                  {showWorkerColumn && (
-                    <td className="muted">
-                      {memberNameById.get(entry.workerId) ?? "—"}
+
+        {/* Selected day entries */}
+        <div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 16,
+            }}
+          >
+            <h2 style={{ margin: 0 }}>{formatMonthDay(selectedDate)}</h2>
+            {selectedEntries.length > 0 && (
+              <span className="badge badge-primary">
+                {formatDurationHuman(selectedTotalSeconds)} logged
+              </span>
+            )}
+          </div>
+
+          {selectedEntries.length === 0 ? (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <EmptyState
+                icon={<IconClock />}
+                title="No time logged on this day."
+                description="Click any worked day in the calendar to see its entries across this workplace's projects."
+              />
+            </div>
+          ) : (
+            <div
+              className="card"
+              style={{ padding: 0, overflowX: "auto", marginBottom: 24 }}
+            >
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Duration</th>
+                    <th>Project</th>
+                    {showWorkerColumn && <th>Worker</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{formatTime(entry.startTime)}</td>
+                      <td>{formatTime(entry.endTime)}</td>
+                      <td style={{ fontWeight: 500 }}>
+                        {formatDuration(durationToSeconds(entry.duration))}
+                      </td>
+                      <td className="muted">
+                        {projectNameById.get(entry.projectId) ?? "—"}
+                      </td>
+                      {showWorkerColumn && (
+                        <td className="muted">
+                          {memberNameById.get(entry.workerId) ?? "—"}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td
+                      colSpan={showWorkerColumn ? 4 : 3}
+                      style={{ fontWeight: 600 }}
+                    >
+                      Total
                     </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td
-                  colSpan={showWorkerColumn ? 4 : 3}
-                  style={{ fontWeight: 600 }}
-                >
-                  Total
-                </td>
-                <td style={{ fontWeight: 700 }}>
-                  {formatDurationHuman(selectedTotalSeconds)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+                    <td style={{ fontWeight: 700 }}>
+                      {formatDurationHuman(selectedTotalSeconds)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {showCreateProject && (
         <Modal

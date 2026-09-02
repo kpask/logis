@@ -1,5 +1,5 @@
 // ============================================================
-// Workis — Shared UI components
+// Logis — Shared UI components
 // ============================================================
 
 import { useEffect, useState, type ReactNode } from "react";

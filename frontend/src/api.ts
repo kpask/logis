@@ -1,5 +1,5 @@
 // ============================================================
-// Workis — API client layer
+// Logis — API client layer
 // All backend communication goes through here.
 // ============================================================
 
@@ -24,7 +24,24 @@ import type {
   WorkplaceResponse,
 } from "./types";
 
-const API_BASE = "http://localhost:8080";
+// API base URL resolution:
+// - If VITE_API_BASE is provided at build/run time, use it.
+// - Otherwise, derive from the current page's hostname so the frontend
+//   served from the developer machine (e.g. http://192.168.1.9:5173)
+//   will point API calls to the same device on the common backend port.
+// - Falls back to http://localhost:8080 for node-side usage or unknown env.
+const _VITE_API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE) || "";
+const _VITE_API_PORT = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_PORT) || "8080";
+
+const API_BASE: string = (() => {
+  if (_VITE_API_BASE) return _VITE_API_BASE;
+  if (typeof window !== "undefined") {
+    const proto = window.location.protocol || "http:";
+    const host = window.location.hostname || "localhost";
+    return `${proto}//${host}:${_VITE_API_PORT}`;
+  }
+  return "http://localhost:8080";
+})();
 
 let authToken: string | null = null;
 

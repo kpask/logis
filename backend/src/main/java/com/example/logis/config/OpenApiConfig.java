@@ -16,8 +16,8 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
-                .info(new Info().title("Workis API")
-                        .description("Workis API documentation with JWT Bearer authentication")
+                .info(new Info().title("Logis API")
+                        .description("Logis API documentation with JWT Bearer authentication")
                         .version("1.0.0"))
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
                 .components(new Components().addSecuritySchemes(SECURITY_SCHEME_NAME,

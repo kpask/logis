@@ -1,5 +1,5 @@
 // ============================================================
-// Workis - Authentication state management
+// Logis - Authentication state management
 // ============================================================
 
 import {
@@ -18,8 +18,8 @@ import type {
   LoginRequest,
 } from "./types";
 
-const TOKEN_KEY = "workis_token";
-const USER_ID_KEY = "workis_user_id";
+const TOKEN_KEY = "logis_token";
+const USER_ID_KEY = "logis_user_id";
 
 interface AuthContextValue {
   user: AppUser | null;

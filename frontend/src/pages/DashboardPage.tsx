@@ -70,7 +70,12 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      // If there's no user yet, ensure loading is cleared so the UI doesn't stay stuck
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -347,7 +352,7 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
       ) : (
         <div
           className="card"
-          style={{ padding: 0, overflow: "hidden", marginBottom: 24 }}
+          style={{ padding: 0, overflowX: "auto", marginBottom: 24 }}
         >
           <table className="table">
             <thead>

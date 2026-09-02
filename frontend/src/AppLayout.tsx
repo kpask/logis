@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useAuth } from "./auth";
+import { useState } from "react";
 import { getInitials } from "./utils";
 import {
   IconBuilding,
@@ -27,6 +28,7 @@ export default function AppLayout({
   children,
 }: AppLayoutProps) {
   const { user } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems: { key: PageKey; label: string; icon: ReactNode }[] = [
     { key: "dashboard", label: "Dashboard", icon: <IconDashboard /> },
@@ -45,11 +47,17 @@ export default function AppLayout({
       : "Profile";
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${mobileOpen ? "sidebar-open" : ""}`}>
+      {/* Mobile overlay for closing sidebar */}
+      <div
+        className="mobile-sidebar-overlay"
+        onClick={() => setMobileOpen(false)}
+      />
+
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">W</div>
-          <span>Workis</span>
+          <span>Logis</span>
         </div>
 
         <nav className="sidebar-nav">
@@ -59,7 +67,10 @@ export default function AppLayout({
               className={`sidebar-nav-item ${
                 page === item.key ? "active" : ""
               }`}
-              onClick={() => onNavigate(item.key)}
+              onClick={() => {
+                onNavigate(item.key);
+                setMobileOpen(false);
+              }}
             >
               {item.icon}
               {item.label}
@@ -69,14 +80,26 @@ export default function AppLayout({
 
         <div className="sidebar-footer">
           {user && (
-            <div className="sidebar-footer-user" onClick={onOpenProfile}>
+            <div
+              className="sidebar-footer-user"
+              onClick={() => {
+                onOpenProfile();
+                setMobileOpen(false);
+              }}
+            >
               <div className="topbar-avatar">{getInitials(user.name)}</div>
               <span>
                 {user.name} {user.lastname}
               </span>
             </div>
           )}
-          <div className="sidebar-footer-logout" onClick={onLogout}>
+          <div
+            className="sidebar-footer-logout"
+            onClick={() => {
+              onLogout();
+              setMobileOpen(false);
+            }}
+          >
             <IconLogout />
             Sign out
           </div>
@@ -85,9 +108,22 @@ export default function AppLayout({
 
       <div className="main-area">
         <header className="topbar">
-          <div>
-            <div className="topbar-title">{pageTitle}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              className="hamburger"
+              aria-label="Open navigation"
+              onClick={() => setMobileOpen(true)}
+            >
+              {/* simple hamburger icon */}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <div>
+              <div className="topbar-title">{pageTitle}</div>
+            </div>
           </div>
+
           {user && (
             <div className="topbar-user" onClick={onOpenProfile}>
               <div className="topbar-avatar">{getInitials(user.name)}</div>

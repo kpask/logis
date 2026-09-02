@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./auth";
 import AppLayout, { type PageKey } from "./AppLayout";
 import LoginPage from "./pages/LoginPage";
@@ -38,6 +38,14 @@ function AppContent() {
     }
     return { type: "auth", mode: "login" };
   });
+
+  // When the user becomes authenticated while we're still on the
+  // auth view, switch to the app dashboard so pages mount correctly.
+  useEffect(() => {
+    if (user && view.type === "auth") {
+      setView({ type: "app", page: "dashboard" });
+    }
+  }, [user, view.type]);
 
   if (loading) {
     return <LoadingState label="Loading…" />;

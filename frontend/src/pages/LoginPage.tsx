@@ -39,8 +39,8 @@ export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <div className="auth-logo-icon">W</div>
-          <div className="auth-logo-text">Workis</div>
+         <div className="auth-logo-icon">L</div>
+         <div className="auth-logo-text">Logis</div>
         </div>
 
         <h1 className="auth-title">Sign in</h1>

@@ -168,7 +168,10 @@ public class ProjectService {
     @Transactional
     public void removeWorkerByProjectIdAndWorkerIdAndUser(Long projectId, long workerId, User requester) {
         Project project = findProject(projectId);
-        User worker = userService.findUser(workerId);
+
+        if(workerId == requester.getId()){
+            throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to remove himself from the project.");
+        }
 
         Company company = companyService.findCompany(requester.getCompany().getId());
         if(!company.getManagers().contains(requester)){

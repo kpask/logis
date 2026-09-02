@@ -140,8 +140,8 @@ export default function InvitationPage({
     <div className="auth-page">
       <div className="auth-card auth-card--invitation">
         <div className="auth-logo">
-          <div className="auth-logo-icon">W</div>
-          <div className="auth-logo-text">Workis</div>
+         <div className="auth-logo-icon">L</div>
+         <div className="auth-logo-text">Logis</div>
         </div>
 
         {loadError === "not-found" ? (
@@ -208,7 +208,7 @@ export default function InvitationPage({
               <strong>{invitation.email}</strong>
             </p>
             <p className="auth-subtitle">
-              Create your Workis account to join {invitation.companyName}.
+             Create your Logis account to join {invitation.companyName}.
             </p>
 
             {formError && (
@@ -322,7 +322,7 @@ export default function InvitationPage({
             </form>
           </>
         ) : (
-          // ── Existing Workis user: go sign in, accept via Invites tab ────
+          // ── Existing Logis user: go sign in, accept via Invites tab ────
           <>
             <div className="company-badge">
               <span className="company-badge-icon">🏢</span>
@@ -336,7 +336,7 @@ export default function InvitationPage({
               <br />
               <strong>{invitation!.email}</strong>
             </p>
-            <p className="auth-subtitle">You already have a Workis account.</p>
+            <p className="auth-subtitle">You already have a Logis account.</p>
             <p className="auth-subtitle">
               Sign in with your account — you can accept this invitation from
               the <strong>Invites</strong> tab afterwards.

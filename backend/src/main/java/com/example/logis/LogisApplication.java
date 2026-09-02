@@ -5,9 +5,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
-public class WorkisApplication {
+public class LogisApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(WorkisApplication.class, args);
+        SpringApplication.run(LogisApplication.class, args);
     }
 }
