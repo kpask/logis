@@ -31,6 +31,7 @@ import {
 } from "../components";
 import {
   durationToSeconds,
+  effectiveDurationSeconds,
   elapsedSecondsFrom,
   formatDate,
   formatDateTime,
@@ -107,6 +108,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   const [addEntryWorkerId, setAddEntryWorkerId] = useState<number | "">("");
   const [addEntryStart, setAddEntryStart] = useState("");
   const [addEntryEnd, setAddEntryEnd] = useState("");
+  const [addEntryLunchLength, setAddEntryLunchLength] = useState(30);
   const [entrySubmitting, setEntrySubmitting] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
 
@@ -116,6 +118,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   );
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
+  const [editLunchLength, setEditLunchLength] = useState(30);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -286,9 +289,9 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
   function openAddEntryModal() {
     setAddEntryWorkerId("");
-    // Default to a full day (09:00-17:00) on the currently selected date.
-    setAddEntryStart(`${selectedDate}T09:00`);
-    setAddEntryEnd(`${selectedDate}T17:00`);
+    setAddEntryStart(`${selectedDate}T07:30`);
+    setAddEntryEnd(`${selectedDate}T16:30`);
+    setAddEntryLunchLength(30);
     setEntryError(null);
     setShowAddEntryModal(true);
   }
@@ -305,6 +308,10 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
       setEntryError("End time must be after start time.");
       return;
     }
+    if (addEntryLunchLength < 0) {
+      setEntryError("Lunch length cannot be negative.");
+      return;
+    }
 
     setEntrySubmitting(true);
     setEntryError(null);
@@ -313,6 +320,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         workerId: addEntryWorkerId,
         startTime: startIso,
         endTime: endIso,
+        lunchLength: addEntryLunchLength,
       });
       setShowAddEntryModal(false);
       await loadData();
@@ -327,6 +335,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     setEditingEntry(entry);
     setEditStart(toLocalDateTimeValue(parseDate(entry.startTime)));
     setEditEnd(toLocalDateTimeValue(parseDate(entry.endTime)));
+    setEditLunchLength(entry.lunchLength ?? 30);
     setEditError(null);
   }
 
@@ -342,6 +351,10 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
       setEditError("End time must be after start time.");
       return;
     }
+    if (editLunchLength < 0) {
+      setEditError("Lunch length cannot be negative.");
+      return;
+    }
 
     setEditSubmitting(true);
     setEditError(null);
@@ -349,6 +362,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
       await timeTrackingApi.update(editingEntry.id, {
         startTime: startIso,
         endTime: endIso,
+        lunchLength: editLunchLength,
       });
       setEditingEntry(null);
       await loadData();
@@ -433,14 +447,19 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
       const d = new Date(e.startTime);
       return d.getFullYear() === viewYear && d.getMonth() === viewMonth;
     })
-    .reduce((sum, entry) => sum + durationToSeconds(entry.duration), 0);
+    .reduce(
+      (sum, entry) =>
+        sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
+      0
+    );
 
   // Entries for the currently selected date only.
   const selectedEntries = completedEntries.filter(
     (e) => toDateKey(new Date(e.startTime)) === selectedDate
   );
   const selectedTotalSeconds = selectedEntries.reduce(
-    (sum, entry) => sum + durationToSeconds(entry.duration),
+    (sum, entry) =>
+      sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
     0
   );
 
@@ -702,7 +721,8 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               <tr>
                 <th>Start</th>
                 <th>End</th>
-                <th>Duration</th>
+                <th>Lunch</th>
+                <th>Worked</th>
                 {showWorkerColumn && <th>Worker</th>}
               </tr>
             </thead>
@@ -717,8 +737,11 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 >
                   <td>{formatTime(entry.startTime)}</td>
                   <td>{formatTime(entry.endTime)}</td>
+                  <td className="muted">{entry.lunchLength}m</td>
                   <td style={{ fontWeight: 500 }}>
-                    {formatDuration(durationToSeconds(entry.duration))}
+                    {formatDuration(
+                      effectiveDurationSeconds(entry.duration, entry.lunchLength)
+                    )}
                   </td>
                   {showWorkerColumn && (
                     <td className="muted">
@@ -731,7 +754,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             <tfoot>
               <tr>
                 <td
-                  colSpan={showWorkerColumn ? 3 : 2}
+                  colSpan={showWorkerColumn ? 4 : 3}
                   style={{ fontWeight: 600 }}
                 >
                   Total
@@ -896,6 +919,27 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 />
               </div>
             </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add-entry-lunch-length">
+                Lunch length (minutes)
+              </label>
+              <input
+                id="add-entry-lunch-length"
+                type="number"
+                min={0}
+                step={5}
+                className="form-input"
+                value={addEntryLunchLength}
+                onChange={(e) =>
+                  setAddEntryLunchLength(
+                    Number.isFinite(Number(e.target.value))
+                      ? Number(e.target.value)
+                      : 0
+                  )
+                }
+                disabled={entrySubmitting}
+              />
+            </div>
           </div>
         </Modal>
       )}
@@ -970,6 +1014,27 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                   disabled={editSubmitting || !editingEntry.endTime}
                 />
               </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-lunch-length">
+                Lunch length (minutes)
+              </label>
+              <input
+                id="edit-lunch-length"
+                type="number"
+                min={0}
+                step={5}
+                className="form-input"
+                value={editLunchLength}
+                onChange={(e) =>
+                  setEditLunchLength(
+                    Number.isFinite(Number(e.target.value))
+                      ? Number(e.target.value)
+                      : 0
+                  )
+                }
+                disabled={editSubmitting || !editingEntry.endTime}
+              />
             </div>
           </div>
         </Modal>

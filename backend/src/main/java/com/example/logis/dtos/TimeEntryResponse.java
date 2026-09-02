@@ -9,5 +9,6 @@ public record TimeEntryResponse(
         Long projectId,
         Instant startTime,
         Instant endTime,
-        long duration
+        long duration,
+        long lunchLength
 ) {}

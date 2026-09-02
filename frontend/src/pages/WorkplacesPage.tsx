@@ -8,7 +8,9 @@ import {
   IconBuilding,
   IconChevronRight,
   IconMapPin,
+  IconPlus,
   LoadingState,
+  Modal,
 } from "../components";
 
 interface WorkplacesPageProps {
@@ -23,6 +25,11 @@ export default function WorkplacesPage({
   const [workplaces, setWorkplaces] = useState<WorkplaceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [showCreateWorkplace, setShowCreateWorkplace] = useState(false);
+  const [workplaceName, setWorkplaceName] = useState("");
+  const [workplaceSubmitting, setWorkplaceSubmitting] = useState(false);
+  const [workplaceError, setWorkplaceError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!user?.companyId) {
@@ -49,6 +56,30 @@ export default function WorkplacesPage({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  async function handleCreateWorkplace() {
+    if (!workplaceName.trim()) {
+      setWorkplaceError("Workplace name is required.");
+      return;
+    }
+
+    setWorkplaceSubmitting(true);
+    setWorkplaceError(null);
+
+    try {
+      const created = await workplacesApi.create({
+        name: workplaceName.trim(),
+        location: null,
+      });
+      setWorkplaces((prev) => [...prev, created]);
+      setShowCreateWorkplace(false);
+      setWorkplaceName("");
+    } catch (err) {
+      setWorkplaceError(getErrorMessage(err));
+    } finally {
+      setWorkplaceSubmitting(false);
+    }
+  }
 
   if (loading) {
     return <LoadingState label="Loading workplaces…" />;
@@ -84,6 +115,17 @@ export default function WorkplacesPage({
             {workplaces.length === 1 ? "workplace" : "workplaces"}
           </p>
         </div>
+        {user?.companyRole === "MANAGER" && (
+          <div className="page-header-actions">
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowCreateWorkplace(true)}
+            >
+              <IconPlus />
+              Create workplace
+            </button>
+          </div>
+        )}
       </div>
 
       {workplaces.length === 0 ? (
@@ -91,7 +133,18 @@ export default function WorkplacesPage({
           <EmptyState
             icon={<IconBuilding />}
             title="No workplaces yet."
-            description="Create a workplace from the dashboard to start organizing projects."
+            description="Create a workplace to start organizing projects."
+            actions={
+              user?.companyRole === "MANAGER" ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setShowCreateWorkplace(true)}
+                >
+                  <IconPlus />
+                  Create workplace
+                </button>
+              ) : undefined
+            }
           />
         </div>
       ) : (
@@ -132,6 +185,60 @@ export default function WorkplacesPage({
             </div>
           ))}
         </div>
+      )}
+
+      {showCreateWorkplace && (
+        <Modal
+          title="Create workplace"
+          description="A workplace is a physical or virtual location where projects happen."
+          onClose={() => {
+            setShowCreateWorkplace(false);
+            setWorkplaceName("");
+            setWorkplaceError(null);
+          }}
+          footer={
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowCreateWorkplace(false);
+                  setWorkplaceName("");
+                  setWorkplaceError(null);
+                }}
+                disabled={workplaceSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleCreateWorkplace}
+                disabled={workplaceSubmitting}
+              >
+                {workplaceSubmitting ? "Creating…" : "Create workplace"}
+              </button>
+            </>
+          }
+        >
+          {workplaceError && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert>{workplaceError}</Alert>
+            </div>
+          )}
+          <form onSubmit={(e) => { e.preventDefault(); handleCreateWorkplace(); }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="workplace-name">Name</label>
+              <input
+                id="workplace-name"
+                type="text"
+                className="form-input"
+                placeholder="e.g. Vilnius Office"
+                value={workplaceName}
+                onChange={(e) => setWorkplaceName(e.target.value)}
+                disabled={workplaceSubmitting}
+              />
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

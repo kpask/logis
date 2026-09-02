@@ -32,6 +32,7 @@ import {
 } from "../components";
 import {
   durationToSeconds,
+  effectiveDurationSeconds,
   formatDate,
   formatDuration,
   formatDurationHuman,
@@ -237,14 +238,19 @@ export default function WorkplacePage({
       const d = new Date(e.startTime);
       return d.getFullYear() === viewYear && d.getMonth() === viewMonth;
     })
-    .reduce((sum, entry) => sum + durationToSeconds(entry.duration), 0);
+    .reduce(
+      (sum, entry) =>
+        sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
+      0
+    );
 
   // Entries for the currently selected date only.
   const selectedEntries = completedEntries.filter(
     (e) => toDateKey(new Date(e.startTime)) === selectedDate
   );
   const selectedTotalSeconds = selectedEntries.reduce(
-    (sum, entry) => sum + durationToSeconds(entry.duration),
+    (sum, entry) =>
+      sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
     0
   );
 
@@ -440,7 +446,8 @@ export default function WorkplacePage({
                   <tr>
                     <th>Start</th>
                     <th>End</th>
-                    <th>Duration</th>
+                    <th>Lunch</th>
+                    <th>Worked</th>
                     <th>Project</th>
                     {showWorkerColumn && <th>Worker</th>}
                   </tr>
@@ -450,8 +457,14 @@ export default function WorkplacePage({
                     <tr key={entry.id}>
                       <td>{formatTime(entry.startTime)}</td>
                       <td>{formatTime(entry.endTime)}</td>
+                      <td className="muted">{entry.lunchLength}m</td>
                       <td style={{ fontWeight: 500 }}>
-                        {formatDuration(durationToSeconds(entry.duration))}
+                        {formatDuration(
+                          effectiveDurationSeconds(
+                            entry.duration,
+                            entry.lunchLength
+                          )
+                        )}
                       </td>
                       <td className="muted">
                         {projectNameById.get(entry.projectId) ?? "—"}
@@ -467,7 +480,7 @@ export default function WorkplacePage({
                 <tfoot>
                   <tr>
                     <td
-                      colSpan={showWorkerColumn ? 4 : 3}
+                      colSpan={showWorkerColumn ? 5 : 4}
                       style={{ fontWeight: 600 }}
                     >
                       Total

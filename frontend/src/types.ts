@@ -104,6 +104,7 @@ export interface TimeEntryResponse {
    * defensively by `durationToSeconds` in case serialization config changes.
    */
   duration: number | { seconds: number; nano: number } | string | null;
+  lunchLength: number;
 }
 
 /** Body for creating a manual time entry (managers only). */
@@ -111,12 +112,14 @@ export interface CreateTimeEntryRequest {
   workerId: number;
   startTime: string; // ISO instant
   endTime: string; // ISO instant
+  lunchLength: number;
 }
 
 /** Body for updating an existing time entry (managers only). */
 export interface UpdateTimeEntryRequest {
   startTime: string; // ISO instant
   endTime: string; // ISO instant
+  lunchLength: number;
 }
 
 export type InvitationStatus =

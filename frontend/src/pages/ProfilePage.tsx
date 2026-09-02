@@ -123,45 +123,21 @@ export default function ProfilePage() {
                 <span className="badge badge-muted">Worker</span>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Company info card */}
-        <div className="card">
-          <h3 style={{ margin: "0 0 16px" }}>Company</h3>
-
-          {loading ? (
-            <LoadingState label="Loading company…" />
-          ) : company ? (
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background: "var(--color-primary-soft)",
-                    color: "var(--color-primary)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <IconBuilding />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 16 }}>
-                    {company.name}
-                  </div>
-                  <div className="muted small">Your company</div>
-                </div>
+              <div className="muted small" style={{ marginBottom: 2 }}>
+                Company
               </div>
+              {loading ? (
+                <div className="muted small">Loading company…</div>
+              ) : company ? (
+                <div style={{ fontWeight: 500 }}>{company.name}</div>
+              ) : (
+                <div className="muted" style={{ fontWeight: 500 }}>
+                  You're not part of a company yet.
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="muted" style={{ padding: "8px 0" }}>
-              You're not part of a company yet.
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

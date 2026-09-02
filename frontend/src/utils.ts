@@ -163,6 +163,25 @@ export function durationToSeconds(
 }
 
 /**
+ * Apply the lunch break to a worked duration. For manual entry durations and
+ * daily totals, the lunch reduction is treated as an offset that only applies
+ * when the worked duration is longer than the configured lunch length. This
+ * keeps short entries at 0 minutes instead of showing a negative working time.
+ */
+export function effectiveDurationSeconds(
+  duration: { seconds: number; nano: number } | number | string | null,
+  lunchLengthMinutes: number | null | undefined
+): number {
+  const rawSeconds = durationToSeconds(duration);
+  const lunchMinutes = Number(lunchLengthMinutes ?? 0);
+  if (!Number.isFinite(lunchMinutes) || lunchMinutes <= 0) {
+    return rawSeconds;
+  }
+  const lunchSeconds = Math.max(0, lunchMinutes * 60);
+  return Math.max(0, rawSeconds - lunchSeconds);
+}
+
+/**
  * Compute the elapsed seconds between an ISO start time and now.
  * Returns 0 when the start time cannot be parsed.
  */

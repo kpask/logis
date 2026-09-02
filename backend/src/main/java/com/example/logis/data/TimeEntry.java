@@ -12,6 +12,7 @@ public class TimeEntry {
     private ProjectWorker projectWorker;
     private Instant startTime;
     private Instant endTime;
+    private Long lunchLength = 30L;
 
     public TimeEntry(ProjectWorker projectWorker) {
         this(projectWorker, Instant.now(), null);
@@ -64,6 +65,23 @@ public class TimeEntry {
             end = Instant.now();
         }
 
-        return Duration.between(startTime, end);
+        Duration duration = Duration.between(startTime, end);
+        if (lunchLength > 0) {
+            duration.minus(Duration.ofMinutes(lunchLength));
+        }
+
+        return duration.isNegative() ? Duration.ZERO : duration;
+    }
+
+    public Long getLunchLength() {
+        return lunchLength;
+    }
+
+    public void setLunchLength(Long lunchLength) {
+        if(lunchLength == null || lunchLength <= 0) {
+            this.lunchLength = 0L;
+            return;
+        }
+        this.lunchLength = lunchLength;
     }
 }

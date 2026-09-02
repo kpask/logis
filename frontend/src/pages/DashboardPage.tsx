@@ -292,26 +292,6 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
             {workplaces.length === 1 ? "workplace" : "workplaces"}
           </p>
         </div>
-        <div className="page-header-actions">
-          {user?.companyRole === "MANAGER" && (
-            <button
-              className="btn btn-secondary"
-              onClick={() => setShowInviteModal(true)}
-            >
-              <IconPlus />
-              Invite member
-            </button>
-          )}
-          {user?.companyRole === "MANAGER" && (
-            <button
-              className="btn btn-primary"
-              onClick={() => setShowCreateWorkplace(true)}
-            >
-              <IconPlus />
-              Create workplace
-            </button>
-          )}
-        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
@@ -339,7 +319,20 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
         </div>
       </div>
 
-      <h2 style={{ marginBottom: 16 }}>Company members</h2>
+      <div className="section-header">
+        <h2>Company members</h2>
+        {user?.companyRole === "MANAGER" && (
+          <div className="section-header-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowInviteModal(true)}
+            >
+              <IconPlus />
+              Invite member
+            </button>
+          </div>
+        )}
+      </div>
 
       {members.length === 0 ? (
         <div className="card" style={{ marginBottom: 24 }}>
@@ -398,7 +391,20 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
         </div>
       )}
 
-      <h2 style={{ marginBottom: 16 }}>Workplaces</h2>
+      <div className="section-header">
+        <h2>Workplaces</h2>
+        {user?.companyRole === "MANAGER" && (
+          <div className="section-header-actions">
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowCreateWorkplace(true)}
+            >
+              <IconPlus />
+              Create workplace
+            </button>
+          </div>
+        )}
+      </div>
 
       {workplaces.length === 0 ? (
         <div className="card">

@@ -8,5 +8,6 @@ public record CreateTimeEntryRequest(
         @NotNull
         Long workerId,
         @NotNull Instant startTime,
-        Instant endTime
+        Instant endTime,
+        Long lunchLength
 ) {}

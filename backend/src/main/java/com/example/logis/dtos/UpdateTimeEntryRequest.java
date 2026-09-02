@@ -6,5 +6,6 @@ import java.time.Instant;
 
 public record UpdateTimeEntryRequest(
         @NotNull Instant startTime,
-        @NotNull Instant endTime
+        @NotNull Instant endTime,
+        Long lunchLength
 ) {}

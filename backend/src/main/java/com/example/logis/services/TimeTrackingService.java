@@ -78,7 +78,8 @@ public class TimeTrackingService {
                 t.getProjectWorker().getProject().getId(),
                 t.getStartTime(),
                 t.getEndTime(),
-                t.getDuration().toSeconds()
+                t.getDuration().toSeconds(),
+                t.getLunchLength() == null ? 0L : t.getLunchLength()
         );
     }
 
@@ -154,11 +155,17 @@ public class TimeTrackingService {
             throw new IllegalArgumentException("End time must be after start time");
         }
 
+        long lunchLength = request.lunchLength() != null ? request.lunchLength() : 30L;
+        if (lunchLength < 0) {
+            throw new IllegalArgumentException("Lunch length cannot be negative");
+        }
+
         TimeEntry timeEntry = new TimeEntry(
                 projectWorker,
                 request.startTime(),
                 request.endTime()
         );
+        timeEntry.setLunchLength(lunchLength);
 
         TimeEntry savedTimeEntry = timeTrackingRepository.save(timeEntry);
         return toResponse(savedTimeEntry);
@@ -181,8 +188,14 @@ public class TimeTrackingService {
             throw new IllegalArgumentException("End time must be after start time");
         }
 
+        long lunchLength = request.lunchLength() != null ? request.lunchLength() : timeEntry.getLunchLength() != null ? timeEntry.getLunchLength() : 30L;
+        if (lunchLength < 0) {
+            throw new IllegalArgumentException("Lunch length cannot be negative");
+        }
+
         timeEntry.setStartTime(request.startTime());
         timeEntry.setEndTime(request.endTime());
+        timeEntry.setLunchLength(lunchLength);
         return toResponse(timeTrackingRepository.save(timeEntry));
     }
 

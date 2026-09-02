@@ -711,6 +711,30 @@ a {
   align-items: center;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.section-header-actions .btn {
+  white-space: nowrap;
+}
+
 /* ============================================================
    Grid helpers
    ============================================================ */
@@ -722,7 +746,8 @@ a {
 
 .grid-2 {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Allow columns to wrap when they can't fit — prevents overlapping/sticky layout around medium widths */
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: var(--space-5);
 }
 
@@ -865,22 +890,27 @@ a {
 
 .timer-display {
   font-family: var(--font-mono);
-  font-size: 56px;
+  /* Responsive sizing to avoid overflow on medium widths */
+  font-size: clamp(24px, 4.5vw, 56px);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--color-text);
   text-align: center;
+  word-break: break-word;
 }
 
 .timer-card {
-  max-width: 480px;
+  /* allow the card to flex to available space when side-by-side, but keep nice padding */
+  max-width: none;
+  width: 100%;
   margin: 0 auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  padding: var(--space-8);
+  padding: var(--space-6);
   text-align: center;
+  box-sizing: border-box;
 }
 
 /* ============================================================
@@ -903,6 +933,27 @@ a {
     overflow-y: auto;
     background: var(--color-surface);
     border-right: 1px solid var(--color-border);
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .page-header-actions .btn,
+  .empty-state-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  .empty-state-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .grid-2,
@@ -952,6 +1003,23 @@ a {
 
 /* Small-screen mobile tweaks: ensure form controls are large enough to avoid iOS auto-zoom */
 @media (max-width: 480px) {
+  .btn {
+    white-space: normal;
+    width: auto;
+    font-size: 16px;
+    padding: 10px 16px;
+  }
+
+  .form-input,
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Small-screen mobile tweaks: ensure form controls are large enough to avoid iOS auto-zoom */
+@media (max-width: 480px) {
   /* Increase tap-target fonts to prevent Safari from zooming when focusing inputs */
   .form-input,
   input,
@@ -964,6 +1032,50 @@ a {
   /* Slightly larger buttons/padding for touch targets */
   .btn {
     padding: 10px 16px;
+  }
+}
+
+/* Layout fixes: prevent horizontal scroll and improve responsive widths */
+
+/* Hide hamburger when sidebar is open (desktop or mobile) */
+.app-layout.sidebar-open .hamburger {
+  display: none;
+}
+
+/* Also hide hamburger on wide screens where sidebar is always visible */
+@media (min-width: 769px) {
+  .hamburger {
+    display: none;
+  }
+}
+
+/* Prevent any horizontal overflow from main content */
+.main-area {
+  overflow-x: hidden;
+}
+
+/* Allow tables to shrink on small screens instead of forcing horizontal scroll */
+.table {
+  min-width: 0;
+}
+
+/* Ensure grid columns can shrink and cards occupy full width on small screens */
+.grid-2 > * {
+  min-width: 0;
+}
+
+.timer-card,
+.calendar-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Ensure timer and calendar stack fully on narrow screens */
+@media (max-width: 768px) {
+  .timer-card,
+  .calendar-card {
+    width: 100%;
   }
 }
 
@@ -1202,15 +1314,40 @@ a {
     color: var(--color-text-faint);
   }
 
-  /* Badge base + muted */
+  /* Badge base: keep neutral styling but allow variant classes to control colors */
   .badge {
-    background: #2d3a4f;
-    color: var(--color-text-muted);
+    background: transparent;
+    border: 1px solid var(--color-border);
   }
 
   .badge-muted {
     background: #2d3a4f;
     color: var(--color-text-muted);
+  }
+
+  /* Ensure variant badges remain visible in dark mode — use solid colors + white text for contrast */
+  .badge-primary {
+    background: var(--color-primary);
+    color: #ffffff;
+    border: none;
+  }
+
+  .badge-success {
+    background: var(--color-success);
+    color: #ffffff;
+    border: none;
+  }
+
+  .badge-warning {
+    background: var(--color-warning);
+    color: #000000;
+    border: none;
+  }
+
+  .badge-danger {
+    background: var(--color-danger);
+    color: #ffffff;
+    border: none;
   }
 
   /* Empty state icon bg */
