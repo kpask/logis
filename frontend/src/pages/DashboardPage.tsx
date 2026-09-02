@@ -194,7 +194,7 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
   // ── User WITHOUT a company ─────────────────────────────────
   if (!company) {
     return (
-      <div>
+      <div className="page-container page-container--compact">
         <div className="page-header">
           <div>
             <h1 className="page-header-title">Dashboard</h1>
@@ -283,7 +283,7 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
 
   // ── User WITH a company ────────────────────────────────────
   return (
-    <div>
+    <div className="page-container page-container--compact">
       <div className="page-header">
         <div>
           <h1 className="page-header-title">Dashboard</h1>
@@ -324,7 +324,7 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
         {user?.companyRole === "MANAGER" && (
           <div className="section-header-actions">
             <button
-              className="btn btn-secondary"
+              className="btn btn-primary"
               onClick={() => setShowInviteModal(true)}
             >
               <IconPlus />

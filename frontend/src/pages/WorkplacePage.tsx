@@ -261,7 +261,7 @@ export default function WorkplacePage({
   const projectNameById = new Map(projects.map((p) => [p.id, p.projectName]));
 
   return (
-    <div>
+    <div className="page-container page-container--compact">
       <div className="page-header">
         <div>
           <div className="topbar-breadcrumb" style={{ marginBottom: 4 }}>
@@ -386,7 +386,7 @@ export default function WorkplacePage({
 
       <h2 style={{ marginBottom: 16 }}>Time tracking</h2>
 
-      <div className="grid-2" style={{ alignItems: "start" }}>
+      <div className="grid" style={{ alignItems: "start" }}>
         <div className="card calendar-card" style={{ marginBottom: 24 }}>
           {isManager && (
             <div style={{ marginBottom: 12 }}>
@@ -410,7 +410,7 @@ export default function WorkplacePage({
           />
         </div>
 
-        {/* Selected day entries */}
+        {/* Selected day entries (now under the calendar) */}
         <div>
           <div
             style={{

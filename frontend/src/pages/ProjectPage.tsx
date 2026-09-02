@@ -486,7 +486,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   const filterMembers = members.filter((m) => filterableMemberIds.has(m.id));
 
   return (
-    <div>
+    <div className="page-container page-container--compact">
       <div className="page-header">
         <div>
           <div className="topbar-breadcrumb" style={{ marginBottom: 4 }}>
@@ -611,8 +611,9 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         )}
       </div>
 
-      <div className="grid-2" style={{ marginBottom: 24, alignItems: "start" }}>
-        <div className="timer-card">
+      <div className="project-timing-panel">
+        {/* Timer above the calendar */}
+        <div className="card timer-card" style={{ marginBottom: 0 }}>
           <div className="muted small" style={{ marginBottom: 8 }}>
             {activeEntry ? "Currently working" : "No timer running"}
           </div>
@@ -647,7 +648,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
           )}
         </div>
 
-        {/* Right column: calendar */}
+        {/* Calendar below timer */}
         <div className="card calendar-card">
           {isManager && (
             <div style={{ marginBottom: 12 }}>

@@ -4,8 +4,8 @@
 
 :root {
   /* Colors */
-  --color-primary: #4f46e5;
-  --color-primary-hover: #4338ca;
+  --color-primary: #000000;
+  --color-primary-hover: #242328;
   --color-primary-soft: #eef2ff;
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
@@ -20,7 +20,7 @@
   --color-success-soft: #f0fdf4;
   --color-warning: #d97706;
   --color-warning-soft: #fffbeb;
-
+  --color-logo: #000000;
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08),
@@ -525,7 +525,7 @@ a {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--color-primary);
+  background: var(--color-logo);
   color: #fff;
   display: flex;
   align-items: center;
@@ -742,6 +742,16 @@ a {
 .grid {
   display: grid;
   gap: var(--space-5);
+  grid-template-columns: 1fr;
+}
+
+.project-timing-panel {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .grid-2 {
@@ -1037,6 +1047,24 @@ a {
 
 /* Layout fixes: prevent horizontal scroll and improve responsive widths */
 
+/* Page container to constrain content width and center on wide screens */
+.page-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Narrower container for form-heavy pages */
+.page-container--form {
+  max-width: 800px;
+}
+
+.page-container--compact {
+  max-width: 680px;
+}
+
 /* Hide hamburger when sidebar is open (desktop or mobile) */
 .app-layout.sidebar-open .hamburger {
   display: none;
@@ -1102,7 +1130,14 @@ a {
    screens — the header (Prev/Next) and grid stay flush within 700px,
    with no side padding and no button drift. */
 .calendar-card {
-  max-width: 700px;
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Make timer card match calendar width and centering */
+.timer-card {
+  max-width: 680px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -1273,10 +1308,10 @@ a {
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-primary: #a33728;
-    --color-primary-hover: #818cf8;
+    --color-primary: #ffffff;
+    --color-primary-hover: #dfe7ff;
     --color-primary-soft: #1e293b;
-    --color-bg: #0f172a;
+    --color-bg: #111623;
     --color-surface: #1e293b;
     --color-border: #334155;
     --color-border-strong: #475569;
@@ -1290,11 +1325,28 @@ a {
     --color-warning: #f59e0b;
     --color-warning-soft: #1f1708;
 
+    --color-button-primary-bg: #8c9aac;
+    --color-button-primary-hover: #cbd5e1;
+    --color-button-primary-text: #0f172a;
+    --color-status-neutral-bg: #334155;
+    --color-status-neutral-text: #e2e8f0;
+
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4),
       0 2px 4px -2px rgba(0, 0, 0, 0.2);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5),
       0 4px 6px -4px rgba(0, 0, 0, 0.2);
+  }
+
+  .btn-primary {
+    background: var(--color-button-primary-bg);
+    color: var(--color-button-primary-text);
+    border-color: var(--color-button-primary-bg);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-button-primary-hover);
+    border-color: var(--color-button-primary-hover);
   }
 
   /* Button hovers that use hardcoded light colors */
@@ -1325,10 +1377,10 @@ a {
     color: var(--color-text-muted);
   }
 
-  /* Ensure variant badges remain visible in dark mode — use solid colors + white text for contrast */
+  /* Keep role/status badges neutral gray in dark mode so they don't inherit the global primary accent */
   .badge-primary {
-    background: var(--color-primary);
-    color: #ffffff;
+    background: var(--color-status-neutral-bg);
+    color: var(--color-status-neutral-text);
     border: none;
   }
 

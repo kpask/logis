@@ -142,7 +142,7 @@ export default function InvitesPage() {
   }
 
   return (
-    <div>
+    <div className="page-container page-container--compact">
       <div className="page-header">
         <div>
           <h1 className="page-header-title">Invites</h1>

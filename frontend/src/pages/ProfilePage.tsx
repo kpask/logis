@@ -37,7 +37,7 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <div>
+    <div className="page-container page-container--form">
       <div className="page-header">
         <div>
           <h1 className="page-header-title">Profile</h1>
