@@ -136,12 +136,13 @@ export const usersApi = {
 
 export const companiesApi = {
   create: (req: CreateCompanyRequest) =>
-    request<CompanyResponse>("POST", "/companies", req),
+    request<CompanyResponse>("POST", "/company", req),
 
-  get: (id: number) => request<CompanyResponse>("GET", `/companies/${id}`),
+  get: (_companyId?: number) =>
+    request<CompanyResponse>("GET", "/company/"),
 
-  getMembers: (companyId: number) =>
-    request<UserResponse[]>("GET", `/companies/${companyId}/members`),
+  getMembers: (_companyId?: number) =>
+    request<UserResponse[]>("GET", "/company/members"),
 };
 
 // ── Workplaces ───────────────────────────────────────────────

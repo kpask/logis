@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import { companiesApi, getErrorMessage } from "../api";
 import type { CompanyResponse } from "../types";
-import { Alert, IconBuilding, LoadingState } from "../components";
+import { Alert } from "../components";
 import { getInitials } from "../utils";
 
 export default function ProfilePage() {

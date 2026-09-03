@@ -39,7 +39,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public ProjectResponse createProject(CreateProjectRequest request, User creator) {
+    public ProjectResponse createProject(CreateProjectRequest request, Long creatorId) {
+        User creator = userService.findUser(creatorId);
         Company company = companyService.findCompany(creator.getCompany().getId());
         Workplace workplace = workplaceService.findWorkplace(request.workplaceId());
 
@@ -56,7 +57,7 @@ public class ProjectService {
                 request.deadline()
         ));
 
-        assignWorker(savedProject.getId(), creator.getId(), creator);
+        assignWorker(savedProject.getId(), creator.getId(), creatorId);
         return toResponse(savedProject);
     }
 
@@ -69,8 +70,14 @@ public class ProjectService {
         return projectWorkerRepository.findByProject_IdAndWorker_Id(projectId, workerId);
     }
 
-    public ProjectResponse getProject(long id) {
-        return toResponse(findProject(id));
+    @Transactional
+    public ProjectResponse getProjectByProjectIdAntUser(Long projectId, Long userId) {
+        User user = userService.findUser(userId);
+        Project project = findProject(projectId);
+        if(!project.getWorkplace().getCompany().getUsers().contains(user)){
+            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view this project, because he is not part of the company.");
+        }
+        return toResponse(project);
     }
 
     public List<ProjectResponse> getWorkplaceProjects(long workplaceId) {
@@ -80,7 +87,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public List<ProjectResponse> getWorkplaceProjectsByWorkplaceIdAndUser(long workplaceId, User user) {
+    public List<ProjectResponse> getWorkplaceProjectsByWorkplaceIdAndUser(long workplaceId, Long userId) {
+        User user = userService.findUser(userId);
         Workplace workplace = workplaceService.findWorkplace(workplaceId);
         if(!workplace.getCompany().getUsers().contains(user)){
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view projects of this workplace, because he is not part of the company.");
@@ -89,7 +97,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public ProjectResponse updateProjectStatus(long projectId, ProjectStatus status, User requester) {
+    public ProjectResponse updateProjectStatus(long projectId, ProjectStatus status, Long requesterId) {
+        User requester = userService.findUser(requesterId);
         Project project = findProject(projectId);
 
         Company company = companyService.findCompany(requester.getCompany().getId());
@@ -116,7 +125,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public void assignWorker(long projectId, long workerId, User assigner) {
+    public void assignWorker(long projectId, long workerId, Long assignerId) {
+        User assigner = userService.findUser(assignerId);
         Project project = findProject(projectId);
         User worker = userService.findUser(workerId);
 
@@ -126,6 +136,9 @@ public class ProjectService {
         }
         if(!project.getWorkplace().getCompany().getId().equals(company.getId())){
             throw new ResourceNotOwnedException("Project does not belong to the assigner's company");
+        }
+        if(worker.getCompany().getId() == null || !worker.getCompany().getId().equals(company.getId())){
+            throw new ForbiddenActionException("Worker " + workerId + " is not part of the assigner's company");
         }
 
         ProjectWorker projectWorker = projectWorkerRepository.findByProject_IdAndWorker_Id(projectId, workerId)
@@ -145,7 +158,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public List<UserResponse> getProjectWorkersByProjectIdAndUser(Long id, User user) {
+    public List<UserResponse> getProjectWorkersByProjectIdAndUser(Long id, Long userId) {
+        User user = userService.findUser(userId);
         Project project = findProject(id);
         if(!project.getWorkplace().getCompany().getUsers().contains(user)){
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view workers of this project, because he is not part of the company.");
@@ -166,7 +180,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public void removeWorkerByProjectIdAndWorkerIdAndUser(Long projectId, long workerId, User requester) {
+    public void removeWorkerByProjectIdAndWorkerIdAndUser(Long projectId, long workerId, Long requesterId) {
+        User requester = userService.findUser(requesterId);
         Project project = findProject(projectId);
 
         if(workerId == requester.getId()){

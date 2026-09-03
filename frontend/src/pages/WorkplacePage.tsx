@@ -31,7 +31,6 @@ import {
   StatusBadge,
 } from "../components";
 import {
-  durationToSeconds,
   effectiveDurationSeconds,
   formatDate,
   formatDuration,

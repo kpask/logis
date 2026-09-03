@@ -24,46 +24,46 @@ public class TimeTrackingController {
 
     @PostMapping("/projects/{projectId}/time-entries/start")
     public TimeEntryResponse startTimeEntry(@PathVariable long projectId, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return timeTrackingService.startTimeEntry(projectId, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.startTimeEntry(projectId, userId);
     }
 
     @PostMapping("/me/time-entries/{id}/stop")
     public TimeEntryResponse stopTimeEntry(@PathVariable long id, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return timeTrackingService.stopTimeEntry(id, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.stopTimeEntry(id, userId);
     }
 
     @GetMapping("/projects/{projectId}/time-entries")
     public List<TimeEntryResponse> getTimeEntriesForProject(@PathVariable long projectId, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return timeTrackingService.getProjectTimeEntries(projectId, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.getProjectTimeEntries(projectId, userId);
     }
 
     @GetMapping("/workplaces/{workplaceId}/time-entries")
     public List<TimeEntryResponse> getTimeEntriesForWorkplace(@PathVariable long workplaceId, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return timeTrackingService.getWorkplaceTimeEntries(workplaceId, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.getWorkplaceTimeEntries(workplaceId, userId);
     }
 
 
     @PostMapping("/projects/{projectId}/time-entries")
     public TimeEntryResponse createTimeEntryForProject(@PathVariable long projectId, @RequestBody @Valid CreateTimeEntryRequest request, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return timeTrackingService.createTimeEntryForProject(projectId, request, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.createTimeEntryForProject(projectId, request, userId);
     }
 
     @PutMapping("/time-entries/{id}")
     public TimeEntryResponse editTimeEntry(@PathVariable long id, @RequestBody @Valid UpdateTimeEntryRequest request, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return timeTrackingService.updateTimeEntry(id, request, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.updateTimeEntry(id, request, userId);
     }
 
     @DeleteMapping("/time-entries/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTimeEntry(@PathVariable long id, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        timeTrackingService.deleteTimeEntry(id, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        timeTrackingService.deleteTimeEntry(id, userId);
     }
 
     @GetMapping("/me/time-entries")
@@ -71,7 +71,7 @@ public class TimeTrackingController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return timeTrackingService.getUserTimeEntries(user.getId(), from, to);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.getUserTimeEntries(userId, from, to);
     }
 }

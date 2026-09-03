@@ -7,6 +7,7 @@ import com.example.logis.dtos.MakeCompanyManagerRequest;
 import com.example.logis.dtos.UserResponse;
 import com.example.logis.services.CompanyService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -21,36 +22,34 @@ public class CompanyController {
         this.companyService = companyService;
     }
 
-    @PostMapping("/companies")
+    @PostMapping("/company")
     public CompanyResponse createCompany(@RequestBody @Valid CreateCompanyRequest request, Authentication authentication){
-        User creator = (User) authentication.getPrincipal();
-        return companyService.createCompany(request, creator);
+        Long creatorId = ((User) authentication.getPrincipal()).getId();
+        return companyService.createCompany(request, creatorId);
     }
 
-    @PostMapping("/companies/{id}/managers")
+    @PostMapping("/company/manager/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void promote(@PathVariable long id, @RequestBody @Valid MakeCompanyManagerRequest request, Authentication authentication){
-        User promoter = (User) authentication.getPrincipal();
-        companyService.makeCompanyManager(new MakeCompanyManagerRequest(
-                promoter.getId(),
-                id,
-                request.futureManagerId()
-        ));
+    public void promote(@PathVariable @Positive long id, Authentication authentication){
+        Long promoterId = ((User) authentication.getPrincipal()).getId();
+        companyService.makeCompanyManager(id, promoterId);
     }
 
-    @GetMapping("/companies/{id}")
-    public CompanyResponse getCompany(@PathVariable long id){
-        return companyService.getCompany(id);
+    @GetMapping("/company/")
+    public CompanyResponse getCompany(Authentication authentication){
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return companyService.getCompanyByUser(userId);
     }
 
-    @GetMapping("/companies/{id}/workerCount")
-    public int getWorkerCount(@PathVariable long id){
-        return companyService.getWorkerCount(id);
+    @GetMapping("/company/workerCount")
+    public int getWorkerCount(Authentication authentication){
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return companyService.getWorkerCountByUser(userId);
     }
 
-    @GetMapping("/companies/{id}/members")
-    public List<UserResponse> getMembers(@PathVariable long id, Authentication authentication){
-        User requester = (User) authentication.getPrincipal();
-        return companyService.getMembers(id, requester);
+    @GetMapping("/company/members")
+    public List<UserResponse> getMembers(Authentication authentication){
+        Long requesterId = ((User) authentication.getPrincipal()).getId();
+        return companyService.getMembersByUser(requesterId);
     }
 }

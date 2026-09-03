@@ -67,7 +67,7 @@ public class TimeEntry {
 
         Duration duration = Duration.between(startTime, end);
         if (lunchLength > 0) {
-            duration.minus(Duration.ofMinutes(lunchLength));
+            duration = duration.minus(Duration.ofMinutes(lunchLength));
         }
 
         return duration.isNegative() ? Duration.ZERO : duration;

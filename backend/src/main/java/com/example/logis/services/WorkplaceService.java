@@ -26,7 +26,8 @@ public class WorkplaceService {
     }
 
     @Transactional
-    public WorkplaceResponse createWorkplace(CreateWorkplaceRequest request, User manager) {
+    public WorkplaceResponse createWorkplace(CreateWorkplaceRequest request, Long managerId) {
+        User manager = userService.findUser(managerId);
         if(manager.getCompany() == null){
             throw new ForbiddenActionException("User " + manager.getId() + " is not part of any company");
         }
@@ -57,9 +58,9 @@ public class WorkplaceService {
     }
 
     @Transactional
-    public List<WorkplaceResponse> getWorkplacesByUser(User authenticatedUser) {
-        User dbUser = userService.findUser(authenticatedUser.getId());
-        return dbUser.getCompany().getWorkplaces().stream()
+    public List<WorkplaceResponse> getWorkplacesByUser(Long userId) {
+        User authenticatedUser = userService.findUser(userId);
+        return authenticatedUser.getCompany().getWorkplaces().stream()
                 .map(workplace -> new WorkplaceResponse(
                         workplace.getId(),
                         workplace.getName(),
@@ -89,7 +90,8 @@ public class WorkplaceService {
         );
     }
 
-    public WorkplaceResponse getWorkplaceByWorkplaceIdAndUser(Long id, User user) {
+    public WorkplaceResponse getWorkplaceByWorkplaceIdAndUser(Long id, Long userId) {
+        User user = userService.findUser(userId);
         Workplace workplace = findWorkplace(id);
         if (!workplace.getCompany().getId().equals(user.getCompany().getId())) {
             throw new ForbiddenActionException("User " + user.getId() + " is not part of the company that owns workplace " + id);
@@ -109,7 +111,8 @@ public class WorkplaceService {
     }
 
     @Transactional
-    public void deleteWorkplaceByWorkplaceIdAndUser(Long id, User user) {
+    public void deleteWorkplaceByWorkplaceIdAndUser(Long id, Long userId) {
+        User user = userService.findUser(userId);
         Workplace workplace = findWorkplace(id);
         if(!workplace.getCompany().getId().equals(user.getCompany().getId())){
             throw new ForbiddenActionException("User " + user.getId() + " is not part of the company that owns workplace " + id);

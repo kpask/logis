@@ -117,19 +117,19 @@ Open your browser and navigate to `http://localhost:5173`
 
 - `GET /user/{id}` - Get user profile by ID
 
-### Companies
+### Company
 
-- `POST /companies` - Create a new company
-- `POST /companies/{id}/managers` - Promote a user to company manager
-- `GET /companies/{id}` - Get company details
-- `GET /companies/{id}/workerCount` - Get total number of workers in company
-- `GET /companies/{id}/members` - Get list of all company members
+- `POST /company` - Create a new company
+- `POST /company/manager/{id}` - Promote a user to company manager
+- `GET /company/` - Get the authenticated user's company
+- `GET /company/workerCount` - Get total number of workers in the company
+- `GET /company/members` - Get list of all company members
 
 ### Workplaces
 
 - `POST /workplace` - Create a new workplace
 - `GET /workplaces` - Get all workplaces for the authenticated user's company
-- `GET /workplaces/{id}` - Get specific workplace details
+- `GET /workplaces/{id}` - Get a specific workplace
 - `GET /workplaces/{id}/projects` - Get all projects in a workplace
 - `DELETE /workplaces/{id}` - Delete a workplace
 
@@ -144,10 +144,10 @@ Open your browser and navigate to `http://localhost:5173`
 
 ### Time Tracking
 
-- `POST /projects/{projectId}/time-entries/start` - Start a new time entry
+- `POST /projects/{projectId}/time-entries/start` - Start a time entry for a project
 - `POST /me/time-entries/{id}/stop` - Stop an active time entry
-- `POST /projects/{projectId}/time-entries` - Create a manual time entry
-- `GET /me/time-entries` - Get all time entries for authenticated user
+- `POST /projects/{projectId}/time-entries` - Create a manual project time entry
+- `GET /me/time-entries` - Get the authenticated user's time entries
 - `GET /projects/{projectId}/time-entries` - Get all time entries for a project
 - `GET /workplaces/{workplaceId}/time-entries` - Get all time entries for a workplace
 - `PUT /time-entries/{id}` - Update a time entry

@@ -3,7 +3,12 @@ package com.example.logis.data;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "users")
+@Table(
+        name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = "email")
+        }
+)
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -12,7 +17,7 @@ public class User {
     private CompanyRole companyRole = CompanyRole.USER;
     @ManyToOne
     private Company company;
-
+    @Column(nullable = false, unique = true)
     private String email;
     private String username;
     private String name;
@@ -66,7 +71,15 @@ public class User {
     }
 
     public void setEmail(String email) {
-        this.email = email;
+        this.email = email == null ? null : email.trim().toLowerCase();
+    }
+
+    @PrePersist
+    @PreUpdate
+    private void normalizeEmail() {
+        if (email != null) {
+            email = email.trim().toLowerCase();
+        }
     }
 
     public String getUsername() {

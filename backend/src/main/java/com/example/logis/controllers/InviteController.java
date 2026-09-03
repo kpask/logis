@@ -19,24 +19,24 @@ public class InviteController {
 
     @GetMapping("/invites/")
     public List<InvitationResponse> getInvites(Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return inviteService.getUserInvites(user).stream()
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return inviteService.getUserInvites(userId).stream()
                 .map(inviteService::toResponse)
                 .toList();
     }
 
     @GetMapping("/invites/sent")
     public List<InvitationResponse> getSentInvites(Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return inviteService.getInvitesSentBy(user).stream()
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return inviteService.getInvitesSentBy(userId).stream()
                 .map(inviteService::toResponse)
                 .toList();
     }
 
     @PostMapping("/invites/")
     public InvitationResponse invite(@Valid @RequestBody InviteUserRequest request, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return inviteService.createInvitation(user, request.email());
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return inviteService.createInvitation(userId, request.email());
     }
 
     @GetMapping("/invites/{token}")
@@ -46,7 +46,7 @@ public class InviteController {
 
     @PostMapping("/invites/{token}")
     public void acceptInvite(@PathVariable String token, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        inviteService.acceptInvite(token, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        inviteService.acceptInvite(token, userId);
     }
 }

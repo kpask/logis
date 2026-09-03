@@ -25,7 +25,8 @@ public class InviteService {
         this.companyService = companyService;
     }
 
-    public InvitationResponse createInvitation(User inviter, String email) {
+    public InvitationResponse createInvitation(Long inviterId, String email) {
+        User inviter = userService.findUser(inviterId);
         if (inviter.getCompany() == null) {
             throw new ForbiddenActionException("You cannot invite users because you are not part of a company.");
         }
@@ -65,7 +66,8 @@ public class InviteService {
     }
 
     @Transactional
-    public void acceptInvite(String token, User accepter){
+    public void acceptInvite(String token, Long accepterId){
+        User accepter = userService.findUser(accepterId);
         CompanyInvitation invitation = findByToken(token);
         if(!invitation.getInvitationStatus().equals(InvitationStatus.PENDING)){
             throw new IllegalStateException("Invitation is no longer valid");
@@ -75,7 +77,7 @@ public class InviteService {
             throw new IllegalStateException("Invitation has expired");
         }
         if(accepter.getCompany() != null){
-            return;
+            throw new ForbiddenActionException("You are already part of a company and cannot accept this invitation.");
         }
         if(!invitation.getEmail().equalsIgnoreCase(accepter.getEmail())){
             throw new ForbiddenActionException("This invitation was sent to another email address.");
@@ -84,12 +86,13 @@ public class InviteService {
         invitation.setInvitationStatus(InvitationStatus.ACCEPTED);
     }
 
-    public List<CompanyInvitation> getUserInvites(User user){
+    public List<CompanyInvitation> getUserInvites(Long userId){
+        User user = userService.findUser(userId);
         return inviteRepository.findByEmailIgnoreCase(user.getEmail());
     }
 
-    public List<CompanyInvitation> getInvitesSentBy(User user){
-        return inviteRepository.findByInvitedById(user.getId());
+    public List<CompanyInvitation> getInvitesSentBy(Long userId){
+        return inviteRepository.findByInvitedById(userId);
     }
 
     public CompanyInvitation findByToken(String token){

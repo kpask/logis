@@ -26,7 +26,7 @@ public class CompanyService {
         this.userService = userService;
     }
 
-    public CompanyResponse getCompany(Long companyId){
+    public CompanyResponse getCompanyById(Long companyId){
         if(companyId == null || companyId < 1){
             throw new IllegalArgumentException("Id must be > 0");
         }
@@ -34,6 +34,15 @@ public class CompanyService {
                 orElseThrow(() -> new CompanyNotFoundException(companyId));
 
         return new CompanyResponse(company.getId(), company.getName());
+    }
+
+    @Transactional
+    public CompanyResponse getCompanyByUser(Long userId){
+        User user = userService.findUser(userId);
+        if(user.getCompany() == null){
+            throw new IllegalArgumentException("User is not associated with any company");
+        }
+        return new CompanyResponse(user.getCompany().getId(), user.getCompany().getName());
     }
 
     public Company findCompany(Long companyId){
@@ -58,22 +67,22 @@ public class CompanyService {
     }
 
     @Transactional
-    public void makeCompanyManager(MakeCompanyManagerRequest request){
-        Company company = findCompany(request.companyId());
-        User newManager = userService.findUser(request.futureManagerId());
-        User existingManager = userService.findUser(request.requesterId());
-
-        if(company.getUsers().contains(newManager) || !company.getManagers().contains(existingManager)){
-            return;
+    public void makeCompanyManager(Long id, Long promoterId){
+        User promoter = userService.findUser(promoterId);
+        User newManager = userService.findUser(id);
+        if(!promoter.getRole().equals(CompanyRole.MANAGER)){
+            throw new ForbiddenActionException("Only managers can promote users to manager role");
         }
-
-        newManager.setCompany(company);
-        company.getManagers().add(newManager);
+        if(promoter.getCompany() == null || !promoter.getCompany().getId().equals(newManager.getCompany().getId())){
+            throw new ForbiddenActionException("Requester and new manager must belong to the same company");
+        }
+        promoter.getCompany().getManagers().add(newManager);
         newManager.setRole(CompanyRole.MANAGER);
     }
 
     @Transactional
-    public CompanyResponse createCompany(CreateCompanyRequest request, User manager) {
+    public CompanyResponse createCompany(CreateCompanyRequest request, Long managerId) {
+        User manager = userService.findUser(managerId);
         Company savedCompany = companyRepository.save(new Company(request.name(), manager));
         manager.setCompany(savedCompany);
         manager.setRole(CompanyRole.MANAGER);
@@ -84,17 +93,32 @@ public class CompanyService {
         );
     }
 
-    public int getWorkerCount(long companyId){
-        findCompany(companyId);
+    public int getWorkerCountByCompanyId(long companyId){
         return userRepository.countByCompanyId(companyId);
     }
 
-    public List<UserResponse> getMembers(long companyId, User requester) {
+    public int getWorkerCountByUser(Long userId){
+        User user = userService.findUser(userId);
+        if(user.getCompany() == null){
+            throw new IllegalArgumentException("User is not associated with any company");
+        }
+        return userRepository.countByCompanyId(user.getCompany().getId());
+    }
+
+    public List<UserResponse> getMembers(long companyId) {
         Company company = findCompany(companyId);
-        if (requester.getCompany() == null || !requester.getCompany().getId().equals(company.getId())) {
+        return userRepository.findByCompanyId(companyId).stream()
+                .map(userService::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public List<UserResponse> getMembersByUser(Long requesterId) {
+        User requester = userService.findUser(requesterId);
+        if (requester.getCompany() == null || requester.getCompany().getId() == null) {
             throw new ForbiddenActionException("You can only view members of your own company.");
         }
-        return userRepository.findByCompanyId(companyId).stream()
+        return userRepository.findByCompanyId(requester.getCompany().getId()).stream()
                 .map(userService::toResponse)
                 .toList();
     }

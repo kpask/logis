@@ -5,6 +5,7 @@ import com.example.logis.dtos.UserResponse;
 import com.example.logis.exceptions.UserNotFoundException;
 import com.example.logis.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
@@ -16,19 +17,8 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-
-    public void inviteUser(Long userId, Long inviterId){
-        User invited = findUser(userId);
-        User inviter = findUser(inviterId);
-
-    }
-
     public User findUser(Long id){
-        if(id < 1){
-            throw new IllegalArgumentException("Invalid user id " + id);
-        }
-        return userRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException(id));
+        return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));
     }
 
     public Optional<User> findUserByEmail(String email){
@@ -49,7 +39,16 @@ public class UserService {
 
     // ── API (DTO) methods — used by controllers ─────────────────────────
 
-    public UserResponse getUser(Long id){
+    @Transactional
+    public UserResponse getUserByIdAndUser(Long id, Long requesterId){
+        User requester = findUser(requesterId);
+        if (requester.getCompany() == null || !requester.getCompany().getUsers().contains(findUser(id))) {
+            throw new IllegalArgumentException("User is not in the same company as the requested user");
+        }
+        return getUserById(id);
+    }
+
+    public UserResponse getUserById(Long id){
         return toResponse(findUser(id));
     }
 

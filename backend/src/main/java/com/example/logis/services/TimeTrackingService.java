@@ -19,15 +19,18 @@ public class TimeTrackingService {
     private final TimeTrackingRepository timeTrackingRepository;
     private final ProjectService projectService;
     private final WorkplaceService workplaceService;
+    private final UserService userService;
 
-    public TimeTrackingService(TimeTrackingRepository timeTrackingRepository, ProjectService projectService, WorkplaceService workplaceService){
+    public TimeTrackingService(TimeTrackingRepository timeTrackingRepository, ProjectService projectService, WorkplaceService workplaceService, UserService userService){
         this.timeTrackingRepository = timeTrackingRepository;
         this.projectService = projectService;
         this.workplaceService = workplaceService;
+        this.userService = userService;
     }
 
     @Transactional
-    public TimeEntryResponse startTimeEntry(long projectId, User user) {
+    public TimeEntryResponse startTimeEntry(long projectId, Long userId) {
+        User user = userService.findUser(userId);
         if(timeTrackingRepository.findActiveTimeEntry(user.getId()).isPresent()){
             throw new IllegalArgumentException("A timer is already running — stop it before starting a new one");
         }
@@ -44,7 +47,8 @@ public class TimeTrackingService {
     }
 
     @Transactional
-    public TimeEntryResponse stopTimeEntry(long id, User user) {
+    public TimeEntryResponse stopTimeEntry(long id, Long userId) {
+        User user = userService.findUser(userId);
         TimeEntry timeEntry = timeTrackingRepository.findById(id)
                 .orElseThrow(() -> new TimeEntryNotFoundException(id));
 
@@ -90,7 +94,8 @@ public class TimeTrackingService {
     }
 
     @Transactional
-    public List<TimeEntryResponse> getProjectTimeEntries(long projectId, User requester) {
+    public List<TimeEntryResponse> getProjectTimeEntries(long projectId, Long requesterId) {
+        User requester = userService.findUser(requesterId);
         Project project = projectService.findProject(projectId);
 
         boolean isProjectWorker = projectService.findProjectWorker(projectId, requester.getId()).isPresent()
@@ -123,7 +128,8 @@ public class TimeTrackingService {
     }
 
     @Transactional(readOnly = true)
-    public List<TimeEntryResponse> getWorkplaceTimeEntries(long workplaceId, User requester) {
+    public List<TimeEntryResponse> getWorkplaceTimeEntries(long workplaceId, Long requesterId) {
+        User requester = userService.findUser(requesterId);
         Workplace workplace = workplaceService.findWorkplace(workplaceId);
         if (!workplace.getCompany().getUsers().contains(requester)) {
             throw new ForbiddenActionException("You are not a member of this company.");
@@ -139,7 +145,8 @@ public class TimeTrackingService {
     }
 
     @Transactional
-    public TimeEntryResponse createTimeEntryForProject(long projectId, CreateTimeEntryRequest request, User user) {
+    public TimeEntryResponse createTimeEntryForProject(long projectId, CreateTimeEntryRequest request, Long userId) {
+        User user = userService.findUser(userId);
         ProjectWorker projectWorker = projectService.findProjectWorker(projectId, request.workerId())
                 .orElseThrow(() -> new ForbiddenActionException("User " + request.workerId() + " is not on project " + projectId));
 
@@ -172,7 +179,8 @@ public class TimeTrackingService {
     }
 
     @Transactional
-    public TimeEntryResponse updateTimeEntry(long timeEntryId, UpdateTimeEntryRequest request, User requester){
+    public TimeEntryResponse updateTimeEntry(long timeEntryId, UpdateTimeEntryRequest request, Long requesterId){
+        User requester = userService.findUser(requesterId);
         TimeEntry timeEntry = timeTrackingRepository.findById(timeEntryId)
                 .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
 
@@ -200,7 +208,8 @@ public class TimeTrackingService {
     }
 
     @Transactional
-    public void deleteTimeEntry(long timeEntryId, User requester){
+    public void deleteTimeEntry(long timeEntryId, Long requesterId){
+        User requester = userService.findUser(requesterId);
         TimeEntry timeEntry = timeTrackingRepository.findById(timeEntryId)
                 .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
 

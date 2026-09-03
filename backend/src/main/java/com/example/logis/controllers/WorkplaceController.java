@@ -26,33 +26,32 @@ public class WorkplaceController {
 
     @PostMapping("/workplace")
     public WorkplaceResponse createWorkplace(@RequestBody @Valid CreateWorkplaceRequest request, Authentication authentication){
-        User creator = (User) authentication.getPrincipal();
-        // nereik manager ids sukurti, per daug reikalu tsg creator id paduosiu, location maybe too or not required idk
-        return workplaceService.createWorkplace(request, creator);
+        Long creatorId = ((User) authentication.getPrincipal()).getId();
+        return workplaceService.createWorkplace(request, creatorId);
     }
 
     @GetMapping("/workplaces")
     public List<WorkplaceResponse> getCompanyWorkplaces(Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return workplaceService.getWorkplacesByUser(user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return workplaceService.getWorkplacesByUser(userId);
     }
 
     @GetMapping("/workplaces/{id}")
     public WorkplaceResponse getWorkplace(@PathVariable long id, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return workplaceService.getWorkplaceByWorkplaceIdAndUser(id, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return workplaceService.getWorkplaceByWorkplaceIdAndUser(id, userId);
     }
 
     @GetMapping("/workplaces/{id}/projects")
     public List<ProjectResponse> getWorkplaceProjects(@PathVariable long id, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        return projectService.getWorkplaceProjectsByWorkplaceIdAndUser(id, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return projectService.getWorkplaceProjectsByWorkplaceIdAndUser(id, userId);
     }
 
     @DeleteMapping("/workplaces/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteWorkplace(@PathVariable Long id, Authentication authentication){
-        User user = (User) authentication.getPrincipal();
-        workplaceService.deleteWorkplaceByWorkplaceIdAndUser(id, user);
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        workplaceService.deleteWorkplaceByWorkplaceIdAndUser(id, userId);
     }
 }
