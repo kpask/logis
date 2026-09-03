@@ -137,7 +137,7 @@ Open your browser and navigate to `http://localhost:5173`
 
 - `POST /project` - Create a new project
 - `GET /project/{id}` - Get project details
-- `POST /project/{id}/assign` - Assign a worker to a project
+- `POST /project/{id}/assign/{workerId}` - Assign a worker to a project
 - `POST /project/{id}/status` - Update project status
 - `GET /project/{id}/workers` - Get all workers assigned to a project
 - `DELETE /project/{id}/workers/{workerId}` - Remove a worker from a project

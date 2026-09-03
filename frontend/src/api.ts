@@ -182,7 +182,7 @@ export const projectsApi = {
 
   /** Assign a company member to the project (managers only). */
   assignWorker: (projectId: number, workerId: number) =>
-    request<void>("POST", `/project/${projectId}/assign`, { workerId }),
+    request<void>("POST", `/project/${projectId}/assign/${workerId}`),
 
   /** Remove a worker from the project (managers only). */
   removeWorker: (projectId: number, workerId: number) =>

@@ -30,11 +30,11 @@ public class ProjectController {
         return projectService.getProjectByProjectIdAntUser(id, userId);
     }
 
-    @PostMapping("/project/{id}/assign")
+    @PostMapping("/project/{id}/assign/{workerId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void assignWorker(@PathVariable long id, @RequestBody @Valid AssignWorkerRequest request, Authentication authentication){
+    public void assignWorker(@PathVariable long id, @PathVariable long workerId, Authentication authentication){
         Long assignerId = ((User) authentication.getPrincipal()).getId();
-        projectService.assignWorker(id, request.workerId(), assignerId);
+        projectService.assignWorker(id, workerId, assignerId);
     }
 
     @PostMapping("/project/{id}/status")

@@ -126,9 +126,9 @@ public class ProjectService {
 
     @Transactional
     public void assignWorker(long projectId, long workerId, Long assignerId) {
-        User assigner = userService.findUser(assignerId);
         Project project = findProject(projectId);
         User worker = userService.findUser(workerId);
+        User assigner = userService.findUser(assignerId);
 
         Company company = companyService.findCompany(assigner.getCompany().getId());
         if(!company.getManagers().contains(assigner)){

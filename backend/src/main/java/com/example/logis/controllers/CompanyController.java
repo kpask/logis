@@ -3,7 +3,6 @@ package com.example.logis.controllers;
 import com.example.logis.data.User;
 import com.example.logis.dtos.CompanyResponse;
 import com.example.logis.dtos.CreateCompanyRequest;
-import com.example.logis.dtos.MakeCompanyManagerRequest;
 import com.example.logis.dtos.UserResponse;
 import com.example.logis.services.CompanyService;
 import jakarta.validation.Valid;
