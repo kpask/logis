@@ -1,13 +1,12 @@
 package com.example.logis.data;
 
-import com.example.logis.services.InviteService;
+import com.example.logis.data.enums.InvitationStatus;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
 @Entity
 public class CompanyInvitation {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

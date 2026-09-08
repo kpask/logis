@@ -3,12 +3,15 @@ package com.example.logis.services;
 import com.example.logis.data.Company;
 import com.example.logis.data.User;
 import com.example.logis.data.Workplace;
+import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.dtos.CreateWorkplaceRequest;
+import com.example.logis.dtos.UpdateWorkplaceRequest;
 import com.example.logis.dtos.WorkplaceResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.WorkplaceNotFoundException;
 import com.example.logis.repository.WorkplaceRepository;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -37,10 +40,12 @@ public class WorkplaceService {
             throw new ForbiddenActionException("User " + manager.getId() + " is not a manager of company " + company.getId());
         }
 
+
         Workplace workplace = new Workplace(
                 request.name(),
                 request.location(),
-                company
+                company,
+                request.radiusDistance() != null ? request.radiusDistance() : 150.0
         );
 
         Workplace savedWorkplace = workplaceRepository.save(workplace);
@@ -48,7 +53,8 @@ public class WorkplaceService {
                 savedWorkplace.getId(),
                 savedWorkplace.getName(),
                 savedWorkplace.getLocation(),
-                savedWorkplace.getCompany().getId()
+                savedWorkplace.getCompany().getId(),
+                savedWorkplace.getRadiusMeters()
         );
     }
 
@@ -60,12 +66,18 @@ public class WorkplaceService {
     @Transactional
     public List<WorkplaceResponse> getWorkplacesByUser(Long userId) {
         User authenticatedUser = userService.findUser(userId);
+
+        if(authenticatedUser.getCompany() == null){
+            throw new ForbiddenActionException("User " + authenticatedUser.getId() + " is not part of any company");
+        }
+
         return authenticatedUser.getCompany().getWorkplaces().stream()
                 .map(workplace -> new WorkplaceResponse(
                         workplace.getId(),
                         workplace.getName(),
                         workplace.getLocation(),
-                        workplace.getCompany().getId()
+                        workplace.getCompany().getId(),
+                        workplace.getRadiusMeters()
                 )).toList();
     }
 
@@ -76,7 +88,8 @@ public class WorkplaceService {
                         workplace.getId(),
                         workplace.getName(),
                         workplace.getLocation(),
-                        workplace.getCompany().getId()
+                        workplace.getCompany().getId(),
+                        workplace.getRadiusMeters()
                 )).toList();
     }
 
@@ -86,7 +99,8 @@ public class WorkplaceService {
                 workplace.getId(),
                 workplace.getName(),
                 workplace.getLocation(),
-                workplace.getCompany().getId()
+                workplace.getCompany().getId(),
+                workplace.getRadiusMeters()
         );
     }
 
@@ -101,21 +115,41 @@ public class WorkplaceService {
                 workplace.getId(),
                 workplace.getName(),
                 workplace.getLocation(),
-                workplace.getCompany().getId()
+                workplace.getCompany().getId(),
+                workplace.getRadiusMeters()
         );
     }
 
-    public void deleteWorkplaceByWorkplaceId(Long id) {
-        Workplace workplace = findWorkplace(id);
-        workplaceRepository.delete(workplace);
+    @Transactional
+    public WorkplaceResponse updateWorkplace(long workplaceId, long userId, UpdateWorkplaceRequest request) {
+        User user = userService.findUser(userId);
+        Workplace workplace = findWorkplace(workplaceId);
+
+        if(user.getRole().equals(CompanyRole.USER) || !workplace.getCompany().getUsers().contains(user)) {
+            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to update workplace " + workplaceId);
+        }
+
+
+        workplace.setName(request.name() == null ? workplace.getName() : request.name());
+        workplace.setLocation(request.location() == null ? workplace.getLocation() : request.location());
+        workplace.setRadiusMeters(request.radiusDistance() == null || request.radiusDistance() < 1 ? workplace.getRadiusMeters() : request.radiusDistance());
+
+        Workplace updatedWorkplace = workplaceRepository.save(workplace);
+        return new WorkplaceResponse(
+                updatedWorkplace.getId(),
+                updatedWorkplace.getName(),
+                updatedWorkplace.getLocation(),
+                updatedWorkplace.getCompany().getId(),
+                updatedWorkplace.getRadiusMeters()
+        );
     }
 
     @Transactional
     public void deleteWorkplaceByWorkplaceIdAndUser(Long id, Long userId) {
         User user = userService.findUser(userId);
         Workplace workplace = findWorkplace(id);
-        if(!workplace.getCompany().getId().equals(user.getCompany().getId())){
-            throw new ForbiddenActionException("User " + user.getId() + " is not part of the company that owns workplace " + id);
+        if(user.getRole().equals(CompanyRole.USER) || !workplace.getCompany().getUsers().contains(user)) {
+            throw new ForbiddenActionException("User " + user.getId() + " is not allowed to edit project " + workplace.getId());
         }
         workplaceRepository.delete(workplace);
     }

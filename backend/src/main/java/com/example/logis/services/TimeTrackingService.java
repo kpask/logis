@@ -1,13 +1,15 @@
 package com.example.logis.services;
 
 import com.example.logis.data.*;
+import com.example.logis.data.enums.CompanyRole;
+import com.example.logis.data.enums.TimeEntryLogStatus;
 import com.example.logis.dtos.CreateTimeEntryRequest;
+import com.example.logis.dtos.StartTimeEntryRequest;
 import com.example.logis.dtos.TimeEntryResponse;
 import com.example.logis.dtos.UpdateTimeEntryRequest;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.TimeEntryNotFoundException;
 import com.example.logis.repository.TimeTrackingRepository;
-import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -29,8 +31,10 @@ public class TimeTrackingService {
     }
 
     @Transactional
-    public TimeEntryResponse startTimeEntry(long projectId, Long userId) {
+    public TimeEntryResponse startTimeEntry(long projectId, Long userId, StartTimeEntryRequest request) {
         User user = userService.findUser(userId);
+        Workplace workplace = projectService.findProject(projectId).getWorkplace();
+
         if(timeTrackingRepository.findActiveTimeEntry(user.getId()).isPresent()){
             throw new IllegalArgumentException("A timer is already running — stop it before starting a new one");
         }
@@ -42,7 +46,23 @@ public class TimeTrackingService {
             throw new ForbiddenActionException("User " + user.getId() + " is no longer assigned to project " + projectId);
         }
 
-        TimeEntry savedTimeEntry = timeTrackingRepository.save(new TimeEntry(projectWorker));
+        boolean inside = true;
+        if (workplace.getLocation() != null) {
+            if (request.latitude() != null && request.longitude() != null) {
+                double distance = distanceMeters(
+                        workplace.getLocation().getLatitude(),
+                        workplace.getLocation().getLongitude(),
+                        request.latitude(),
+                        request.longitude()
+                );
+
+                inside = distance <= workplace.getRadiusMeters();
+            } else {
+                inside = false;
+            }
+        }
+
+        TimeEntry savedTimeEntry = timeTrackingRepository.save(new TimeEntry(projectWorker, inside ? TimeEntryLogStatus.LOGGED : TimeEntryLogStatus.LOGGED_OUTSIDE));
         return toResponse(savedTimeEntry);
     }
 
@@ -67,9 +87,25 @@ public class TimeTrackingService {
     }
 
     @Transactional(readOnly = true)
-    public List<TimeEntryResponse> getUserTimeEntries(long userId, Instant from, Instant to) {
+    public List<TimeEntryResponse> getUserTimeEntries(long userId, long requesterUserId, Instant from, Instant to) {
+        User user = userService.findUser(userId);
+        User requester = userService.findUser(requesterUserId);
+        boolean isSelf = user.getId().equals(requester.getId());
+        boolean requesterIsManager = requester.getRole().equals(CompanyRole.MANAGER);
+        if (!isSelf && !requesterIsManager) {
+            throw new ForbiddenActionException("You are not authorized to view others work time");
+        }
+        if (requester.getCompany() == null) {
+            throw new ForbiddenActionException("You are not part of a company.");
+        }
+        return getUserTimeEntries(user.getId(), from, to, requester.getCompany().getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TimeEntryResponse> getUserTimeEntries(long userId, Instant from, Instant to, long companyId) {
         return timeTrackingRepository.findAllByWorkerId(userId).stream()
                 .filter(t -> inRange(t, from, to))
+                .filter(t -> t.getProjectWorker().getProject().getWorkplace().getCompany().getId() == companyId)
                 .map(this::toResponse)
                 .toList();
     }
@@ -83,7 +119,8 @@ public class TimeTrackingService {
                 t.getStartTime(),
                 t.getEndTime(),
                 t.getDuration().toSeconds(),
-                t.getLunchLength() == null ? 0L : t.getLunchLength()
+                t.getLunchLength() == null ? 0L : t.getLunchLength(),
+                t.getStatus()
         );
     }
 
@@ -170,7 +207,8 @@ public class TimeTrackingService {
         TimeEntry timeEntry = new TimeEntry(
                 projectWorker,
                 request.startTime(),
-                request.endTime()
+                request.endTime(),
+                TimeEntryLogStatus.MANUAL_ENTRY
         );
         timeEntry.setLunchLength(lunchLength);
 
@@ -204,6 +242,9 @@ public class TimeTrackingService {
         timeEntry.setStartTime(request.startTime());
         timeEntry.setEndTime(request.endTime());
         timeEntry.setLunchLength(lunchLength);
+        if(!timeEntry.getStatus().equals(TimeEntryLogStatus.MANUAL_ENTRY)){
+            timeEntry.setStatus(TimeEntryLogStatus.EDITED);
+        }
         return toResponse(timeTrackingRepository.save(timeEntry));
     }
 
@@ -223,5 +264,15 @@ public class TimeTrackingService {
         }
 
         timeTrackingRepository.delete(timeEntry);
+    }
+
+    public static double distanceMeters(double lat1, double lon1, double lat2, double lon2) {
+        double earthRadius = 6371000; // meters
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.pow(Math.sin(dLat / 2), 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.pow(Math.sin(dLon / 2), 2);
+        return 2 * earthRadius * Math.asin(Math.sqrt(a));
     }
 }

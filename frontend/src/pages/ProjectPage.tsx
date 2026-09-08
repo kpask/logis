@@ -6,9 +6,11 @@ import {
   timeTrackingApi,
   workplacesApi,
 } from "../api";
+import ClockInModal from "../ClockInModal";
 import type {
   ProjectResponse,
   ProjectStatus,
+  TimeEntryLogStatus,
   TimeEntryResponse,
   UserResponse,
   WorkplaceResponse,
@@ -22,6 +24,7 @@ import {
   IconPlay,
   IconPlus,
   IconStop,
+  IconTrash,
   IconUsers,
   LoadingState,
   MemberSelect,
@@ -30,6 +33,7 @@ import {
   StatusBadge,
 } from "../components";
 import {
+  distanceMeters,
   effectiveDurationSeconds,
   elapsedSecondsFrom,
   formatDate,
@@ -40,6 +44,7 @@ import {
   formatTime,
   formatTimer,
   fromLocalDateTimeValue,
+  getBrowserPosition,
   getInitials,
   parseDate,
   toDateKey,
@@ -49,6 +54,29 @@ import {
 interface ProjectPageProps {
   projectId: number;
   onBack: () => void;
+}
+
+/** Small colored badge describing how a time entry was logged. */
+function TimeEntryStatusBadge({ status }: { status: TimeEntryLogStatus }) {
+  const meta: Record<
+    TimeEntryLogStatus,
+    { label: string; color: string; background: string }
+  > = {
+    LOGGED: { label: "Logged", color: "#2f7d32", background: "#e6f4ea" },
+    LOGGED_OUTSIDE: {
+      label: "Outside",
+      color: "#b45309",
+      background: "#fdf1e0",
+    },
+    MANUAL_ENTRY: { label: "Manual", color: "#1d4ed8", background: "#e7edfd" },
+    EDITED: { label: "Edited", color: "#6d28d9", background: "#f1eafe" },
+  };
+  const { label, color, background } = meta[status];
+  return (
+    <span className="badge" style={{ color, background, whiteSpace: "nowrap" }}>
+      {label}
+    </span>
+  );
 }
 
 // Mirrors the backend ProjectStatus enum.
@@ -88,19 +116,41 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   const [timerError, setTimerError] = useState<string | null>(null);
   const tickRef = useRef<number | null>(null);
 
+  // Clock-in flow state: the Start button locates the worker first; when
+  // they appear to be outside the work area, the confirmation popup opens.
+  const [locating, setLocating] = useState(false);
+  const [clockInPrompt, setClockInPrompt] = useState<{
+    position: { latitude: number; longitude: number } | null;
+  } | null>(null);
+
   // Status state
   const [isManager, setIsManager] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<ProjectStatus>("ACTIVE");
-  const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
 
   // Project workers state
   const [workers, setWorkers] = useState<UserResponse[]>([]);
+  // Former company members (kicked) — merged into name resolution so their
+  // historical entries show real names instead of "—". Managers only.
+  const [formerMembers, setFormerMembers] = useState<UserResponse[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignWorkerId, setAssignWorkerId] = useState<number | "">("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Edit project modal (managers only)
+  const [showEditProject, setShowEditProject] = useState(false);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editProjectStartDate, setEditProjectStartDate] = useState("");
+  const [editProjectDeadline, setEditProjectDeadline] = useState("");
+  const [editProjectStatus, setEditProjectStatus] =
+    useState<ProjectStatus>("ACTIVE");
+  const [editProjectSubmitting, setEditProjectSubmitting] = useState(false);
+  const [editProjectError, setEditProjectError] = useState<string | null>(null);
+
+  // Delete project (managers only)
+  const [projectDeleting, setProjectDeleting] = useState(false);
+  const [projectDeleteError, setProjectDeleteError] = useState<string | null>(
+    null
+  );
 
   // Manager add-entry modal state
   const [showAddEntryModal, setShowAddEntryModal] = useState(false);
@@ -157,6 +207,14 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             const me = memberList.find((m) => m.id === user.id);
             setIsManager(me?.companyRole === "MANAGER");
             setMembers(memberList);
+
+            if (me?.companyRole === "MANAGER") {
+              try {
+                setFormerMembers(await companiesApi.getFormerMembers());
+              } catch {
+                setFormerMembers([]);
+              }
+            }
           } catch {
             setIsManager(false);
             setMembers([]);
@@ -195,17 +253,64 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     };
   }, [activeEntry]);
 
-  async function handleStartTimer() {
-    setTimerError(null);
+  async function startTimer(
+    coords: { latitude: number; longitude: number } | null
+  ) {
     setTimerActionLoading(true);
     try {
-      const entry = await timeTrackingApi.start(projectId);
+      const entry = await timeTrackingApi.start(projectId, {
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+      });
       setActiveEntry(entry);
       setElapsedSeconds(0);
+      if (entry.status === "LOGGED_OUTSIDE") {
+        setTimerError(
+          "Timer started outside the work area — this entry is flagged as logged outside."
+        );
+      }
+      void loadData();
     } catch (err) {
       setTimerError(getErrorMessage(err));
     } finally {
       setTimerActionLoading(false);
+    }
+  }
+
+  /**
+   * "Start timer" click flow:
+   * 1. Ask the browser for the current position (permission prompt on click).
+   * 2. Inside the work area (or workplace without location) → start silently,
+   *    no popup.
+   * 3. Outside / location unavailable → open the confirmation popup with the
+   *    map; the timer only starts after "Start timer anyway".
+   */
+  async function handleStartTimer() {
+    setTimerError(null);
+    setLocating(true);
+    try {
+      const position = await getBrowserPosition();
+
+      const wp = workplace?.location ?? null;
+      const radius = workplace?.radiusDistance ?? 150;
+      const inside =
+        !wp ||
+        !position ||
+        distanceMeters(
+          wp.latitude,
+          wp.longitude,
+          position.latitude,
+          position.longitude
+        ) <= radius;
+
+      if (inside) {
+        await startTimer(position);
+      } else {
+        // Stay "locating" (button disabled) while the popup is open.
+        setClockInPrompt({ position });
+      }
+    } finally {
+      setLocating(false);
     }
   }
 
@@ -237,21 +342,51 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     }
   }
 
-  async function handleStatusSave() {
+  function openEditProjectModal() {
+    setEditProjectName(project?.projectName ?? "");
+    setEditProjectStartDate(project?.startDate ?? "");
+    setEditProjectDeadline(project?.deadline ?? "");
+    setEditProjectStatus(project?.projectStatus ?? "ACTIVE");
+    setEditProjectError(null);
+    setShowEditProject(true);
+  }
+
+  async function handleEditProject() {
     if (!project) return;
-    setStatusSubmitting(true);
-    setStatusError(null);
+    setEditProjectSubmitting(true);
+    setEditProjectError(null);
     try {
-      const updated = await projectsApi.updateStatus(
-        project.id,
-        selectedStatus
-      );
+      const updated = await projectsApi.update(project.id, {
+        projectName: editProjectName,
+        startDate: editProjectStartDate || null,
+        deadline: editProjectDeadline || null,
+        projectStatus: editProjectStatus,
+      });
       setProject(updated);
-      setShowStatusModal(false);
+      setShowEditProject(false);
     } catch (err) {
-      setStatusError(getErrorMessage(err));
+      setEditProjectError(getErrorMessage(err));
     } finally {
-      setStatusSubmitting(false);
+      setEditProjectSubmitting(false);
+    }
+  }
+
+  async function handleDeleteProject() {
+    if (!project) return;
+    const confirmed = window.confirm(
+      `Delete "${project.projectName}"? This will permanently remove the project and all of its time entries.`
+    );
+    if (!confirmed) return;
+
+    setProjectDeleteError(null);
+    setProjectDeleting(true);
+    try {
+      await projectsApi.delete(project.id);
+      onBack();
+    } catch (err) {
+      setProjectDeleteError(getErrorMessage(err));
+    } finally {
+      setProjectDeleting(false);
     }
   }
 
@@ -467,7 +602,9 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   // worker list as a fallback) so removed workers with historical entries still
   // render their names in the time entry table.
   const workerNameById = new Map(
-    [...members, ...workers].map((w) => [w.id, `${w.name} ${w.lastname}`])
+    [...members, ...workers, ...formerMembers].map(
+      (w) => [w.id, `${w.name} ${w.lastname}`] as const
+    )
   );
 
   // Company members that are not yet assigned to this project.
@@ -500,7 +637,38 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             </a>{" "}
             / {project.projectName}
           </div>
-          <h1 className="page-header-title">{project.projectName}</h1>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <h1 className="page-header-title" style={{ margin: 0 }}>
+              {project.projectName}
+            </h1>
+            <StatusBadge status={project.projectStatus} />
+            {isManager && (
+              <>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginLeft: "auto" }}
+                  onClick={openEditProjectModal}
+                >
+                  Edit
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={handleDeleteProject}
+                  disabled={projectDeleting}
+                >
+                  <IconTrash />
+                  {projectDeleting ? "Deleting…" : "Delete"}
+                </button>
+              </>
+            )}
+          </div>
           <p className="page-header-subtitle">
             {workplace?.name || "Workplace"} · Started{" "}
             {formatDate(project.startDate)}
@@ -511,35 +679,11 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         </div>
       </div>
 
-      {/* Status */}
-      <div
-        className="card"
-        style={{
-          marginBottom: 24,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span className="muted small">Status</span>
-          <StatusBadge status={project.projectStatus} />
+      {projectDeleteError && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <Alert>{projectDeleteError}</Alert>
         </div>
-        {isManager && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              setSelectedStatus(project.projectStatus);
-              setStatusError(null);
-              setShowStatusModal(true);
-            }}
-          >
-            Change status
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Workers */}
       <div className="card" style={{ marginBottom: 24 }}>
@@ -639,10 +783,10 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             <button
               className="btn btn-primary btn-lg"
               onClick={handleStartTimer}
-              disabled={timerActionLoading}
+              disabled={timerActionLoading || locating}
             >
               <IconPlay />
-              {timerActionLoading ? "Starting…" : "Start timer"}
+              {locating ? "Checking location…" : "Start timer"}
             </button>
           )}
         </div>
@@ -697,7 +841,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               onClick={openAddEntryModal}
             >
               <IconPlus />
-              Add entry
+              Log time
             </button>
           )}
         </div>
@@ -722,6 +866,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 <th>Start</th>
                 <th>End</th>
                 <th>Lunch</th>
+                <th>Status</th>
                 <th>Worked</th>
                 {showWorkerColumn && <th>Worker</th>}
               </tr>
@@ -738,9 +883,15 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                   <td>{formatTime(entry.startTime)}</td>
                   <td>{formatTime(entry.endTime)}</td>
                   <td className="muted">{entry.lunchLength}m</td>
+                  <td>
+                    <TimeEntryStatusBadge status={entry.status} />
+                  </td>
                   <td style={{ fontWeight: 500 }}>
                     {formatDuration(
-                      effectiveDurationSeconds(entry.duration, entry.lunchLength)
+                      effectiveDurationSeconds(
+                        entry.duration,
+                        entry.lunchLength
+                      )
                     )}
                   </td>
                   {showWorkerColumn && (
@@ -754,7 +905,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             <tfoot>
               <tr>
                 <td
-                  colSpan={showWorkerColumn ? 4 : 3}
+                  colSpan={showWorkerColumn ? 5 : 4}
                   style={{ fontWeight: 600 }}
                 >
                   Total
@@ -768,64 +919,17 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         </div>
       )}
 
-      {showStatusModal && (
-        <Modal
-          title="Change project status"
-          description={project.projectName}
-          onClose={() => setShowStatusModal(false)}
-          footer={
-            <>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setShowStatusModal(false)}
-                disabled={statusSubmitting}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleStatusSave}
-                disabled={statusSubmitting}
-              >
-                {statusSubmitting ? "Saving…" : "Save"}
-              </button>
-            </>
-          }
-        >
-          {statusError && (
-            <div style={{ marginBottom: 16 }}>
-              <Alert>{statusError}</Alert>
-            </div>
-          )}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {PROJECT_STATUSES.map((status) => (
-              <label
-                key={status}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  cursor: statusSubmitting ? "not-allowed" : "pointer",
-                  padding: "6px 8px",
-                  borderRadius: 8,
-                  border:
-                    selectedStatus === status
-                      ? "1px solid var(--color-primary)"
-                      : "1px solid transparent",
-                }}
-              >
-                <input
-                  type="radio"
-                  name="project-status"
-                  checked={selectedStatus === status}
-                  onChange={() => setSelectedStatus(status)}
-                  disabled={statusSubmitting}
-                />
-                <StatusBadge status={status} />
-              </label>
-            ))}
-          </div>
-        </Modal>
+      {clockInPrompt && (
+        <ClockInModal
+          workplace={workplace}
+          position={clockInPrompt.position}
+          onClose={() => setClockInPrompt(null)}
+          onConfirm={() => {
+            const coords = clockInPrompt.position;
+            setClockInPrompt(null);
+            void startTimer(coords);
+          }}
+        />
       )}
 
       {showAddEntryModal && (
@@ -891,33 +995,31 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 ))}
               </select>
             </div>
-            <div className="grid-2" style={{ gap: 12 }}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="add-entry-start">
-                  Start
-                </label>
-                <input
-                  id="add-entry-start"
-                  type="datetime-local"
-                  className="form-input"
-                  value={addEntryStart}
-                  onChange={(e) => setAddEntryStart(e.target.value)}
-                  disabled={entrySubmitting}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="add-entry-end">
-                  End
-                </label>
-                <input
-                  id="add-entry-end"
-                  type="datetime-local"
-                  className="form-input"
-                  value={addEntryEnd}
-                  onChange={(e) => setAddEntryEnd(e.target.value)}
-                  disabled={entrySubmitting}
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-start">
+                Start
+              </label>
+              <input
+                id="edit-project-start"
+                type="datetime-local"
+                className="form-input"
+                value={editStart}
+                onChange={(e) => setEditStart(e.target.value)}
+                disabled={editSubmitting || !editingEntry.endTime}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-end">
+                End
+              </label>
+              <input
+                id="edit-project-end"
+                type="datetime-local"
+                className="form-input"
+                value={editEnd}
+                onChange={(e) => setEditEnd(e.target.value)}
+                disabled={editSubmitting || !editingEntry.endTime}
+              />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="add-entry-lunch-length">
@@ -1105,6 +1207,120 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               </div>
             )}
           </div>
+        </Modal>
+      )}
+
+      {showEditProject && (
+        <Modal
+          title="Edit project"
+          description={`Update details for ${
+            editProjectName || "this project"
+          }.`}
+          onClose={() => setShowEditProject(false)}
+          footer={
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowEditProject(false)}
+                disabled={editProjectSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleEditProject}
+                disabled={editProjectSubmitting}
+              >
+                {editProjectSubmitting ? "Saving…" : "Save changes"}
+              </button>
+            </>
+          }
+        >
+          {editProjectError && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert>{editProjectError}</Alert>
+            </div>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEditProject();
+            }}
+          >
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-name">
+                Project name
+              </label>
+              <input
+                id="edit-project-name"
+                type="text"
+                className="form-input"
+                placeholder="e.g. Website redesign"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                disabled={editProjectSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-start">
+                Start date
+              </label>
+              <input
+                id="edit-project-start"
+                type="date"
+                className="form-input"
+                value={editProjectStartDate}
+                onChange={(e) => setEditProjectStartDate(e.target.value)}
+                disabled={editProjectSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-deadline">
+                Deadline
+              </label>
+              <input
+                id="edit-project-deadline"
+                type="date"
+                className="form-input"
+                value={editProjectDeadline}
+                onChange={(e) => setEditProjectDeadline(e.target.value)}
+                disabled={editProjectSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                {PROJECT_STATUSES.map((status) => (
+                  <label
+                    key={status}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      cursor: editProjectSubmitting ? "not-allowed" : "pointer",
+                      padding: "6px 8px",
+                      borderRadius: 8,
+                      border:
+                        editProjectStatus === status
+                          ? "1px solid var(--color-primary)"
+                          : "1px solid transparent",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="edit-project-status"
+                      checked={editProjectStatus === status}
+                      onChange={() => setEditProjectStatus(status)}
+                      disabled={editProjectSubmitting}
+                    />
+                    <StatusBadge status={status} />
+                  </label>
+                ))}
+              </div>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

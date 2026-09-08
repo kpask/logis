@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import { companiesApi, getErrorMessage, workplacesApi } from "../api";
-import type { CompanyResponse, WorkplaceResponse } from "../types";
+import type { CompanyResponse, Location, WorkplaceResponse } from "../types";
 import {
   Alert,
+  DropdownMenu,
   EmptyState,
   IconBuilding,
-  IconChevronRight,
   IconMapPin,
   IconPlus,
   LoadingState,
   Modal,
 } from "../components";
+import type { DropdownMenuItem } from "../components";
+import MapPicker from "../MapPicker";
 
 interface WorkplacesPageProps {
   onOpenWorkplace: (workplaceId: number) => void;
@@ -28,8 +30,20 @@ export default function WorkplacesPage({
 
   const [showCreateWorkplace, setShowCreateWorkplace] = useState(false);
   const [workplaceName, setWorkplaceName] = useState("");
+  const [workplaceLocation, setWorkplaceLocation] = useState<Location | null>(
+    null
+  );
+  const [workplaceRadius, setWorkplaceRadius] = useState(150);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [workplaceSubmitting, setWorkplaceSubmitting] = useState(false);
   const [workplaceError, setWorkplaceError] = useState<string | null>(null);
+
+  const [workplaceDeletingId, setWorkplaceDeletingId] = useState<number | null>(
+    null
+  );
+  const [workplaceDeleteError, setWorkplaceDeleteError] = useState<
+    string | null
+  >(null);
 
   const loadData = useCallback(async () => {
     if (!user?.companyId) {
@@ -69,16 +83,49 @@ export default function WorkplacesPage({
     try {
       const created = await workplacesApi.create({
         name: workplaceName.trim(),
-        location: null,
+        location: showLocationPicker ? workplaceLocation : null,
+        radiusDistance: showLocationPicker ? workplaceRadius : null,
       });
       setWorkplaces((prev) => [...prev, created]);
       setShowCreateWorkplace(false);
       setWorkplaceName("");
+      setWorkplaceLocation(null);
+      setWorkplaceRadius(150);
+      setShowLocationPicker(false);
     } catch (err) {
       setWorkplaceError(getErrorMessage(err));
     } finally {
       setWorkplaceSubmitting(false);
     }
+  }
+
+  async function handleDeleteWorkplace(wp: WorkplaceResponse) {
+    const confirmed = window.confirm(
+      `Delete "${wp.name}"? This will permanently remove the workplace and all of its projects and time entries.`
+    );
+    if (!confirmed) return;
+
+    setWorkplaceDeleteError(null);
+    setWorkplaceDeletingId(wp.id);
+    try {
+      await workplacesApi.delete(wp.id);
+      setWorkplaces((prev) => prev.filter((w) => w.id !== wp.id));
+    } catch (err) {
+      setWorkplaceDeleteError(getErrorMessage(err));
+    } finally {
+      setWorkplaceDeletingId(null);
+    }
+  }
+
+  function workplaceActions(wp: WorkplaceResponse): DropdownMenuItem[] {
+    return [
+      {
+        label: "Delete",
+        danger: true,
+        disabled: workplaceDeletingId === wp.id,
+        onSelect: () => handleDeleteWorkplace(wp),
+      },
+    ];
   }
 
   if (loading) {
@@ -181,9 +228,26 @@ export default function WorkplacesPage({
                   {wp.location?.city || "No location set"}
                 </div>
               </div>
-              <IconChevronRight />
+              {user?.companyRole === "MANAGER" && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ flexShrink: 0 }}
+                >
+                  <DropdownMenu
+                    items={workplaceActions(wp)}
+                    disabled={workplaceDeletingId === wp.id}
+                    title="Workplace actions"
+                  />
+                </div>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {workplaceDeleteError && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <Alert>{workplaceDeleteError}</Alert>
         </div>
       )}
 
@@ -194,6 +258,9 @@ export default function WorkplacesPage({
           onClose={() => {
             setShowCreateWorkplace(false);
             setWorkplaceName("");
+            setWorkplaceLocation(null);
+            setWorkplaceRadius(150);
+            setShowLocationPicker(false);
             setWorkplaceError(null);
           }}
           footer={
@@ -203,6 +270,9 @@ export default function WorkplacesPage({
                 onClick={() => {
                   setShowCreateWorkplace(false);
                   setWorkplaceName("");
+                  setWorkplaceLocation(null);
+                  setWorkplaceRadius(150);
+                  setShowLocationPicker(false);
                   setWorkplaceError(null);
                 }}
                 disabled={workplaceSubmitting}
@@ -224,9 +294,16 @@ export default function WorkplacesPage({
               <Alert>{workplaceError}</Alert>
             </div>
           )}
-          <form onSubmit={(e) => { e.preventDefault(); handleCreateWorkplace(); }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateWorkplace();
+            }}
+          >
             <div className="form-group">
-              <label className="form-label" htmlFor="workplace-name">Name</label>
+              <label className="form-label" htmlFor="workplace-name">
+                Name
+              </label>
               <input
                 id="workplace-name"
                 type="text"
@@ -236,6 +313,63 @@ export default function WorkplacesPage({
                 onChange={(e) => setWorkplaceName(e.target.value)}
                 disabled={workplaceSubmitting}
               />
+            </div>
+
+            <div className="form-group">
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showLocationPicker}
+                  onChange={(e) => {
+                    setShowLocationPicker(e.target.checked);
+                    if (!e.target.checked) {
+                      setWorkplaceLocation(null);
+                    }
+                  }}
+                  disabled={workplaceSubmitting}
+                />
+                Set a location for this workplace
+              </label>
+              {showLocationPicker && (
+                <div style={{ marginTop: 12 }}>
+                  <MapPicker
+                    value={workplaceLocation}
+                    onChange={setWorkplaceLocation}
+                    radiusMeters={workplaceRadius}
+                  />
+                  <div style={{ marginTop: 12 }}>
+                    <label className="form-label" htmlFor="workplace-radius">
+                      Clock-in fence radius:{" "}
+                      <strong>{workplaceRadius} m</strong>
+                    </label>
+                    <input
+                      id="workplace-radius"
+                      type="range"
+                      min={50}
+                      max={2000}
+                      step={10}
+                      className="form-input"
+                      value={workplaceRadius}
+                      onChange={(e) =>
+                        setWorkplaceRadius(Number(e.target.value))
+                      }
+                      disabled={workplaceSubmitting}
+                    />
+                    <div className="muted small">
+                      Workers must be within this distance for their time entry
+                      to be logged as on-site. Entries outside are still allowed
+                      but flagged.
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </form>
         </Modal>

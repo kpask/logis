@@ -1,6 +1,6 @@
 package com.example.logis.dtos;
 
-import com.example.logis.data.ProjectStatus;
+import com.example.logis.data.enums.ProjectStatus;
 
 import java.time.LocalDate;
 

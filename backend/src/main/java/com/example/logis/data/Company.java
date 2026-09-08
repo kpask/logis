@@ -1,5 +1,6 @@
 package com.example.logis.data;
 
+import com.example.logis.data.enums.CompanyRole;
 import jakarta.persistence.*;
 
 import java.util.ArrayList;
@@ -7,40 +8,30 @@ import java.util.List;
 
 @Entity
 public class Company {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
-    @ManyToMany
-    private List<User> managers = new ArrayList<User>();
     @OneToMany(mappedBy = "company")
     private List<User> users = new ArrayList<User>();
     @OneToMany(mappedBy = "company")
     private List<Workplace> workplaces = new ArrayList<Workplace>();
-    @OneToMany
+    @OneToMany(mappedBy = "company")
     private final List<CompanyInvitation> invitations = new ArrayList<>();
 
-
-    public Company(String name, List<User> managers, List<User> users){
+    public Company(String name, List<User> users){
         this.name = name;
-        this.managers = managers;
         this.users = users;
     }
 
-    public Company(String name, User manager){
+    public Company(String name){
         this.name = name;
-        managers.add(manager);
     }
 
     protected Company(){}
 
     public List<User> getManagers() {
-        return managers;
-    }
-
-    public void setManagers(List<User> managers) {
-        this.managers = managers;
+        return users.stream().filter(user -> user.getRole() == CompanyRole.MANAGER).toList();
     }
 
     public Long getId() {

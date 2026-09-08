@@ -2,6 +2,7 @@ package com.example.logis.controllers;
 
 import com.example.logis.data.User;
 import com.example.logis.dtos.CreateTimeEntryRequest;
+import com.example.logis.dtos.StartTimeEntryRequest;
 import com.example.logis.dtos.TimeEntryResponse;
 import com.example.logis.dtos.UpdateTimeEntryRequest;
 import com.example.logis.services.TimeTrackingService;
@@ -23,9 +24,9 @@ public class TimeTrackingController {
     }
 
     @PostMapping("/projects/{projectId}/time-entries/start")
-    public TimeEntryResponse startTimeEntry(@PathVariable long projectId, Authentication authentication){
+    public TimeEntryResponse startTimeEntry(@PathVariable long projectId, @RequestBody @Valid StartTimeEntryRequest request, Authentication authentication) {
         Long userId = ((User) authentication.getPrincipal()).getId();
-        return timeTrackingService.startTimeEntry(projectId, userId);
+        return timeTrackingService.startTimeEntry(projectId, userId, request);
     }
 
     @PostMapping("/me/time-entries/{id}/stop")
@@ -53,6 +54,15 @@ public class TimeTrackingController {
         return timeTrackingService.createTimeEntryForProject(projectId, request, userId);
     }
 
+    @GetMapping("/time-entries/{userId}")
+    public List<TimeEntryResponse> getUserTimeEntries(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @PathVariable int userId, Authentication authentication
+    ){
+        User user = (User) authentication.getPrincipal();
+        return timeTrackingService.getUserTimeEntries(userId, user.getId(), from, to);
+    }
     @PutMapping("/time-entries/{id}")
     public TimeEntryResponse editTimeEntry(@PathVariable long id, @RequestBody @Valid UpdateTimeEntryRequest request, Authentication authentication){
         Long userId = ((User) authentication.getPrincipal()).getId();
@@ -71,7 +81,7 @@ public class TimeTrackingController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return timeTrackingService.getUserTimeEntries(userId, from, to);
+        User user = (User) authentication.getPrincipal();
+        return timeTrackingService.getUserTimeEntries(user.getId(), user.getId(), from, to);
     }
 }

@@ -2,12 +2,14 @@ package com.example.logis.services;
 
 import com.example.logis.data.Company;
 import com.example.logis.data.Project;
-import com.example.logis.data.ProjectStatus;
+import com.example.logis.data.enums.CompanyRole;
+import com.example.logis.data.enums.ProjectStatus;
 import com.example.logis.data.ProjectWorker;
 import com.example.logis.data.User;
 import com.example.logis.data.Workplace;
 import com.example.logis.dtos.CreateProjectRequest;
 import com.example.logis.dtos.ProjectResponse;
+import com.example.logis.dtos.UpdateProjectRequest;
 import com.example.logis.dtos.UserResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.ProjectNotFoundException;
@@ -15,6 +17,7 @@ import com.example.logis.exceptions.ResourceNotOwnedException;
 import com.example.logis.repository.ProjectRepository;
 import com.example.logis.repository.ProjectWorkerRepository;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -137,7 +140,7 @@ public class ProjectService {
         if(!project.getWorkplace().getCompany().getId().equals(company.getId())){
             throw new ResourceNotOwnedException("Project does not belong to the assigner's company");
         }
-        if(worker.getCompany().getId() == null || !worker.getCompany().getId().equals(company.getId())){
+        if(worker.getCompany() == null || !worker.getCompany().getId().equals(company.getId())){
             throw new ForbiddenActionException("Worker " + workerId + " is not part of the assigner's company");
         }
 
@@ -201,5 +204,33 @@ public class ProjectService {
 
         projectWorker.setEndDate(LocalDate.now());
         projectWorkerRepository.save(projectWorker);
+    }
+
+    @Transactional
+    public ProjectResponse updateProject(long projectId, Long userId, @Valid UpdateProjectRequest request) {
+        User user = userService.findUser(userId);
+        Project project = findProject(projectId);
+        Company company = companyService.findCompany(project.getWorkplace().getCompany().getId());
+
+        if(user.getRole().equals(CompanyRole.USER) || !company.getUsers().contains(user)){
+            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to update the project.");
+        }
+
+        project.setProjectName(request.projectName() == null ? project.getProjectName() : request.projectName());
+        project.setStartDate(request.startDate() == null ? project.getStartDate() : request.startDate());
+        project.setDeadline(request.deadline() == null ? project.getDeadline() : request.deadline());
+        project.setProjectStatus(request.projectStatus() == null ? project.getProjectStatus() : request.projectStatus());
+        return toResponse(projectRepository.save(project));
+    }
+
+    @Transactional
+    public void deleteProject(long id, Long userId) {
+        User user = userService.findUser(userId);
+        Project project = findProject(id);
+        if(user.getRole().equals(CompanyRole.USER) || !project.getWorkplace().getCompany().getId().equals(user.getCompany().getId())) {
+            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to delete the project.");
+        }
+
+        projectRepository.delete(project);
     }
 }

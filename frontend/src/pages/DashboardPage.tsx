@@ -6,6 +6,7 @@ import {
   invitationsApi,
   workplacesApi,
 } from "../api";
+import UserWorkCalendarModal from "../UserWorkCalendarModal";
 import type {
   CompanyResponse,
   CompanyRole,
@@ -15,17 +16,62 @@ import type {
 } from "../types";
 import {
   Alert,
+  DropdownMenu,
   EmptyState,
   IconBuilding,
-  IconChevronRight,
   IconMapPin,
   IconPlus,
   IconUsers,
   LoadingState,
   Modal,
 } from "../components";
+import type { DropdownMenuItem } from "../components";
 import { getInitials } from "../utils";
 import MapPicker from "../MapPicker";
+
+interface MemberActionsMenuProps {
+  member: UserResponse;
+  isManager: boolean;
+  isSelf: boolean;
+  busy: boolean;
+  onOpenCalendar: () => void;
+  onPromote?: () => void;
+  onKick?: () => void;
+}
+
+/**
+ * The "⋮" context menu for a member row: view calendar for everyone,
+ * plus promote/kick for managers acting on other members.
+ */
+function MemberActionsMenu({
+  member,
+  isManager,
+  isSelf,
+  busy,
+  onOpenCalendar,
+  onPromote,
+  onKick,
+}: MemberActionsMenuProps) {
+  const items: DropdownMenuItem[] = [
+    { label: "View calendar", onSelect: onOpenCalendar },
+  ];
+  if (isManager && !isSelf) {
+    if (member.companyRole !== "MANAGER") {
+      items.push({
+        label: "Promote to manager",
+        disabled: busy,
+        onSelect: () => onPromote?.(),
+      });
+    }
+    items.push({
+      label: "Kick from company",
+      danger: true,
+      disabled: busy,
+      onSelect: () => onKick?.(),
+    });
+  }
+  return <DropdownMenu items={items} disabled={busy} />;
+}
 
 function roleBadge(role: CompanyRole | null | undefined) {
   if (role === "MANAGER") {
@@ -62,12 +108,34 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
   const [workplaceSubmitting, setWorkplaceSubmitting] = useState(false);
   const [workplaceError, setWorkplaceError] = useState<string | null>(null);
 
+  // Delete workplace
+  const [workplaceDeletingId, setWorkplaceDeletingId] = useState<number | null>(
+    null
+  );
+  const [workplaceDeleteError, setWorkplaceDeleteError] = useState<
+    string | null
+  >(null);
+
   // Invite member modal
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+
+  // Member management (managers only)
+  const [memberActionError, setMemberActionError] = useState<string | null>(
+    null
+  );
+  const [memberActionId, setMemberActionId] = useState<number | null>(null);
+  const [calendarMember, setCalendarMember] = useState<UserResponse | null>(
+    null
+  );
+  const [openMenuMember, setOpenMenuMember] = useState<UserResponse | null>(
+    null
+  );
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [formerMembers, setFormerMembers] = useState<UserResponse[]>([]);
 
   const loadData = useCallback(async () => {
     if (!user) {
@@ -89,10 +157,20 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
         setCompany(companyData);
         setWorkplaces(workplaceData);
         setMembers(memberData);
+
+        // Former members (kicked users with project history) — managers only.
+        if (user.companyRole === "MANAGER") {
+          try {
+            setFormerMembers(await companiesApi.getFormerMembers());
+          } catch {
+            setFormerMembers([]);
+          }
+        }
       } else {
         setCompany(null);
         setWorkplaces([]);
         setMembers([]);
+        setFormerMembers([]);
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -142,6 +220,7 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
     try {
       const created = await workplacesApi.create({
         name: workplaceName.trim(),
+        radiusDistance: null,
         location: workplaceLocation,
       });
       setWorkplaces((prev) => [...prev, created]);
@@ -152,6 +231,88 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
       setWorkplaceError(getErrorMessage(err));
     } finally {
       setWorkplaceSubmitting(false);
+    }
+  }
+
+  // ── Workplace management (delete) ──────────────────────────
+  async function handleDeleteWorkplace(wp: WorkplaceResponse) {
+    const confirmed = window.confirm(
+      `Delete "${wp.name}"? This will permanently remove the workplace and all of its projects and time entries.`
+    );
+    if (!confirmed) return;
+
+    setWorkplaceDeleteError(null);
+    setWorkplaceDeletingId(wp.id);
+    try {
+      await workplacesApi.delete(wp.id);
+      setWorkplaces((prev) => prev.filter((w) => w.id !== wp.id));
+    } catch (err) {
+      setWorkplaceDeleteError(getErrorMessage(err));
+    } finally {
+      setWorkplaceDeletingId(null);
+    }
+  }
+
+  function workplaceActions(wp: WorkplaceResponse): DropdownMenuItem[] {
+    return [
+      {
+        label: "Delete",
+        danger: true,
+        disabled: workplaceDeletingId === wp.id,
+        onSelect: () => handleDeleteWorkplace(wp),
+      },
+    ];
+  }
+
+  // ── Member management (promote / kick) ───────────────────────
+  async function handlePromote(member: UserResponse) {
+    const confirmed = window.confirm(
+      `Promote ${member.name} ${member.lastname} to manager?`
+    );
+    if (!confirmed) return;
+
+    setMemberActionError(null);
+    setMemberActionId(member.id);
+    try {
+      await companiesApi.promote(member.id);
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === member.id ? { ...m, companyRole: "MANAGER" } : m
+        )
+      );
+      await refreshUser();
+    } catch (err) {
+      setMemberActionError(getErrorMessage(err));
+    } finally {
+      setMemberActionId(null);
+    }
+  }
+
+  async function handleKick(member: UserResponse) {
+    const confirmed = window.confirm(
+      `Remove ${member.name} ${member.lastname} from ${
+        company?.name ?? "the company"
+      }? They will lose access to all workplaces and projects, and their project assignments will be ended.`
+    );
+    if (!confirmed) return;
+
+    setMemberActionError(null);
+    setMemberActionId(member.id);
+    try {
+      await companiesApi.kick(member.id);
+      setMembers((prev) => prev.filter((m) => m.id !== member.id));
+      // The kicked user moves into the Former members list.
+      if (user?.companyRole === "MANAGER") {
+        try {
+          setFormerMembers(await companiesApi.getFormerMembers());
+        } catch {
+          /* keep the previous list */
+        }
+      }
+    } catch (err) {
+      setMemberActionError(getErrorMessage(err));
+    } finally {
+      setMemberActionId(null);
     }
   }
 
@@ -334,6 +495,12 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
         )}
       </div>
 
+      {memberActionError && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <Alert>{memberActionError}</Alert>
+        </div>
+      )}
+
       {members.length === 0 ? (
         <div className="card" style={{ marginBottom: 24 }}>
           <EmptyState
@@ -353,15 +520,31 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
                 <th>Member</th>
                 <th>Username</th>
                 <th>Role</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {members.map((member) => (
-                <tr key={member.id}>
+                <tr
+                  key={member.id}
+                  style={{ cursor: "pointer" }}
+                  onClick={(e) => {
+                    setMenuPosition({
+                      top: Math.min(e.clientY + 4, window.innerHeight - 120),
+                      left: Math.max(
+                        8,
+                        Math.min(e.clientX, window.innerWidth - 200)
+                      ),
+                    });
+                    setOpenMenuMember(member);
+                  }}
+                >
                   <td>
                     <div
-                      style={{ display: "flex", alignItems: "center", gap: 12 }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
                     >
                       <div
                         className="topbar-avatar"
@@ -380,15 +563,142 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
                   </td>
                   <td className="muted">{member.username}</td>
                   <td>{roleBadge(member.companyRole)}</td>
-                  <td style={{ textAlign: "right" }}>
-                    {/* Reserved for future member-management actions */}
-                    <span className="muted small">—</span>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {openMenuMember && (
+        <div
+          className="dropdown-menu-popup"
+          style={{
+            position: "fixed",
+            top: menuPosition.top,
+            left: menuPosition.left,
+            zIndex: 1000,
+          }}
+          role="menu"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="dropdown-item"
+            onClick={() => {
+              setCalendarMember(openMenuMember);
+              setOpenMenuMember(null);
+            }}
+          >
+            View calendar
+          </button>
+          {user?.companyRole === "MANAGER" &&
+            openMenuMember.id !== user?.id && (
+              <>
+                {openMenuMember.companyRole !== "MANAGER" && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="dropdown-item"
+                    disabled={memberActionId === openMenuMember.id}
+                    onClick={() => {
+                      handlePromote(openMenuMember);
+                      setOpenMenuMember(null);
+                    }}
+                  >
+                    Promote to manager
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dropdown-item danger"
+                  disabled={memberActionId === openMenuMember.id}
+                  onClick={() => {
+                    handleKick(openMenuMember);
+                    setOpenMenuMember(null);
+                  }}
+                >
+                  Kick from company
+                </button>
+              </>
+            )}
+        </div>
+      )}
+      {openMenuMember && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999,
+          }}
+          onClick={() => setOpenMenuMember(null)}
+        />
+      )}
+
+      {user?.companyRole === "MANAGER" && formerMembers.length > 0 && (
+        <>
+          <div className="section-header">
+            <h2>Former members</h2>
+          </div>
+          <div
+            className="card"
+            style={{ padding: 0, overflowX: "auto", marginBottom: 24 }}
+          >
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Username</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formerMembers.map((member) => (
+                  <tr key={member.id}>
+                    <td>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <div
+                          className="topbar-avatar"
+                          aria-hidden="true"
+                          style={{ flexShrink: 0, opacity: 0.6 }}
+                        >
+                          {getInitials(`${member.name} ${member.lastname}`)}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>
+                            {member.name} {member.lastname}
+                          </div>
+                          <div className="muted small">{member.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="muted">{member.username}</td>
+                    <td>
+                      <span className="badge badge-muted">Former member</span>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <MemberActionsMenu
+                        member={member}
+                        isManager={false}
+                        isSelf={false}
+                        busy={false}
+                        onOpenCalendar={() => setCalendarMember(member)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <div className="section-header">
@@ -405,6 +715,12 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
           </div>
         )}
       </div>
+
+      {workplaceDeleteError && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <Alert>{workplaceDeleteError}</Alert>
+        </div>
+      )}
 
       {workplaces.length === 0 ? (
         <div className="card">
@@ -459,7 +775,18 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
                   {wp.location?.city || "No location set"}
                 </div>
               </div>
-              <IconChevronRight />
+              {user?.companyRole === "MANAGER" && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ flexShrink: 0 }}
+                >
+                  <DropdownMenu
+                    items={workplaceActions(wp)}
+                    disabled={workplaceDeletingId === wp.id}
+                    title="Workplace actions"
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -518,6 +845,13 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
             </div>
           </form>
         </Modal>
+      )}
+
+      {calendarMember && (
+        <UserWorkCalendarModal
+          member={calendarMember}
+          onClose={() => setCalendarMember(null)}
+        />
       )}
 
       {showInviteModal && (

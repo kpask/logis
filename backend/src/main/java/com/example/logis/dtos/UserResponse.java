@@ -1,6 +1,6 @@
 package com.example.logis.dtos;
 
-import com.example.logis.data.CompanyRole;
+import com.example.logis.data.enums.CompanyRole;
 
 public record UserResponse (
         Long id,

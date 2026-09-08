@@ -6,5 +6,6 @@ public record WorkplaceResponse(
         Long id,
         String name,
         Location location,
-        Long companyId
+        Long companyId,
+        double radiusDistance
 ) {}

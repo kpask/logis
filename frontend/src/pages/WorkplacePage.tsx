@@ -7,9 +7,12 @@ import {
   timeTrackingApi,
   workplacesApi,
 } from "../api";
+import MapPicker from "../MapPicker";
 import type {
   CompanyResponse,
+  Location,
   ProjectResponse,
+  ProjectStatus,
   TimeEntryResponse,
   UserResponse,
   WorkplaceResponse,
@@ -24,6 +27,7 @@ import {
   IconFolder,
   IconMapPin,
   IconPlus,
+  IconTrash,
   LoadingState,
   MemberSelect,
   Modal,
@@ -39,6 +43,15 @@ import {
   formatTime,
   toDateKey,
 } from "../utils";
+
+// Mirrors the backend ProjectStatus enum.
+const PROJECT_STATUSES: ProjectStatus[] = [
+  "PENDING",
+  "ACTIVE",
+  "COMPLETED",
+  "CANCELLED",
+  "ON_HOLD",
+];
 
 interface WorkplacePageProps {
   workplaceId: number;
@@ -72,6 +85,20 @@ export default function WorkplacePage({
   const [selectedMember, setSelectedMember] =
     useState<MemberFilterValue>("all");
 
+  // Edit workplace modal (managers only): name, location and geofence radius.
+  const [showEditWorkplace, setShowEditWorkplace] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editLocation, setEditLocation] = useState<Location | null>(null);
+  const [editRadius, setEditRadius] = useState(150);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Delete workplace
+  const [workplaceDeleting, setWorkplaceDeleting] = useState(false);
+  const [workplaceDeleteError, setWorkplaceDeleteError] = useState<
+    string | null
+  >(null);
+
   // Create project modal
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -79,6 +106,25 @@ export default function WorkplacePage({
   const [projectDeadline, setProjectDeadline] = useState("");
   const [projectSubmitting, setProjectSubmitting] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
+
+  // Edit project modal
+  const [showEditProject, setShowEditProject] = useState(false);
+  const [editProjectId, setEditProjectId] = useState<number | null>(null);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editProjectStartDate, setEditProjectStartDate] = useState("");
+  const [editProjectDeadline, setEditProjectDeadline] = useState("");
+  const [editProjectStatus, setEditProjectStatus] =
+    useState<ProjectStatus>("ACTIVE");
+  const [editProjectSubmitting, setEditProjectSubmitting] = useState(false);
+  const [editProjectError, setEditProjectError] = useState<string | null>(null);
+
+  // Delete project
+  const [projectDeletingId, setProjectDeletingId] = useState<number | null>(
+    null
+  );
+  const [projectDeleteError, setProjectDeleteError] = useState<string | null>(
+    null
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -154,6 +200,58 @@ export default function WorkplacePage({
     }
   }
 
+  function openEditWorkplaceModal() {
+    setEditName(workplace?.name ?? "");
+    setEditLocation(workplace?.location ?? null);
+    setEditRadius(workplace?.radiusDistance ?? 150);
+    setEditError(null);
+    setShowEditWorkplace(true);
+  }
+
+  async function handleSaveWorkplace(e: FormEvent) {
+    e.preventDefault();
+    if (!workplace) return;
+    if (!editName.trim()) {
+      setEditError("Workplace name is required.");
+      return;
+    }
+
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      const updated = await workplacesApi.update(workplace.id, {
+        name: editName.trim(),
+        location: editLocation,
+        radiusDistance: editRadius,
+      });
+      setWorkplace(updated);
+      setShowEditWorkplace(false);
+    } catch (err) {
+      setEditError(getErrorMessage(err));
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
+  async function handleDeleteWorkplace() {
+    if (!workplace) return;
+    const confirmed = window.confirm(
+      `Delete "${workplace.name}"? This will permanently remove the workplace and all of its projects and time entries.`
+    );
+    if (!confirmed) return;
+
+    setWorkplaceDeleteError(null);
+    setWorkplaceDeleting(true);
+    try {
+      await workplacesApi.delete(workplace.id);
+      onBack();
+    } catch (err) {
+      setWorkplaceDeleteError(getErrorMessage(err));
+    } finally {
+      setWorkplaceDeleting(false);
+    }
+  }
+
   async function handleCreateProject(e: FormEvent) {
     e.preventDefault();
     setProjectError(null);
@@ -180,6 +278,57 @@ export default function WorkplacePage({
       setProjectError(getErrorMessage(err));
     } finally {
       setProjectSubmitting(false);
+    }
+  }
+
+  function openEditProjectModal(project: ProjectResponse) {
+    setEditProjectId(project.id);
+    setEditProjectName(project.projectName);
+    setEditProjectStartDate(project.startDate ?? "");
+    setEditProjectDeadline(project.deadline ?? "");
+    setEditProjectStatus(project.projectStatus);
+    setEditProjectError(null);
+    setShowEditProject(true);
+  }
+
+  async function handleEditProject() {
+    if (!editProjectId) return;
+
+    setEditProjectSubmitting(true);
+    setEditProjectError(null);
+    try {
+      const updated = await projectsApi.update(editProjectId, {
+        projectName: editProjectName,
+        startDate: editProjectStartDate || null,
+        deadline: editProjectDeadline || null,
+        projectStatus: editProjectStatus,
+      });
+      setProjects((prev) =>
+        prev.map((p) => (p.id === editProjectId ? updated : p))
+      );
+      setShowEditProject(false);
+    } catch (err) {
+      setEditProjectError(getErrorMessage(err));
+    } finally {
+      setEditProjectSubmitting(false);
+    }
+  }
+
+  async function handleDeleteProject(project: ProjectResponse) {
+    const confirmed = window.confirm(
+      `Delete "${project.projectName}"? This will permanently remove the project and all of its time entries.`
+    );
+    if (!confirmed) return;
+
+    setProjectDeleteError(null);
+    setProjectDeletingId(project.id);
+    try {
+      await projectsApi.delete(project.id);
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    } catch (err) {
+      setProjectDeleteError(getErrorMessage(err));
+    } finally {
+      setProjectDeletingId(null);
     }
   }
 
@@ -275,24 +424,50 @@ export default function WorkplacePage({
             </a>{" "}
             / {workplace.name}
           </div>
-          <h1 className="page-header-title">{workplace.name}</h1>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <h1 className="page-header-title" style={{ margin: 0 }}>
+              {workplace.name}
+            </h1>
+            {isManager && (
+              <>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginLeft: "auto" }}
+                  onClick={openEditWorkplaceModal}
+                >
+                  <IconMapPin />
+                  Edit
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={handleDeleteWorkplace}
+                  disabled={workplaceDeleting}
+                >
+                  <IconTrash />
+                  {workplaceDeleting ? "Deleting…" : "Delete workplace"}
+                </button>
+              </>
+            )}
+          </div>
           <p className="page-header-subtitle">
             {company?.name || "Company"} ·{" "}
             {workplace.location?.city || "No location set"}
           </p>
         </div>
-        <div className="page-header-actions">
-          {isManager && (
-            <button
-              className="btn btn-primary"
-              onClick={() => setShowCreateProject(true)}
-            >
-              <IconPlus />
-              Create project
-            </button>
-          )}
-        </div>
       </div>
+
+      {workplaceDeleteError && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <Alert>{workplaceDeleteError}</Alert>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -327,7 +502,26 @@ export default function WorkplacePage({
         </div>
       </div>
 
-      <h2 style={{ marginBottom: 16 }}>Projects</h2>
+      <div className="section-header">
+        <h2>Projects</h2>
+        {isManager && (
+          <div className="section-header-actions">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowCreateProject(true)}
+            >
+              <IconPlus />
+              Create project
+            </button>
+          </div>
+        )}
+      </div>
+
+      {projectDeleteError && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <Alert>{projectDeleteError}</Alert>
+        </div>
+      )}
 
       {projects.length === 0 ? (
         <div className="card">
@@ -349,7 +543,7 @@ export default function WorkplacePage({
           />
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflowX: "auto" }}>
+        <div className="card table-scroll" style={{ padding: 0 }}>
           <table className="table">
             <thead>
               <tr>
@@ -357,7 +551,7 @@ export default function WorkplacePage({
                 <th>Status</th>
                 <th>Start date</th>
                 <th>Deadline</th>
-                <th></th>
+                <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -374,7 +568,39 @@ export default function WorkplacePage({
                   <td>{formatDate(project.startDate)}</td>
                   <td>{formatDate(project.deadline)}</td>
                   <td style={{ textAlign: "right" }}>
-                    <IconChevronRight />
+                    {isManager ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          justifyContent: "flex-end",
+                        }}
+                      >
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditProjectModal(project);
+                          }}
+                          title="Edit project"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteProject(project);
+                          }}
+                          disabled={projectDeletingId === project.id}
+                          title="Delete project"
+                        >
+                          <IconTrash />
+                        </button>
+                      </div>
+                    ) : (
+                      <IconChevronRight />
+                    )}
                   </td>
                 </tr>
               ))}
@@ -437,8 +663,8 @@ export default function WorkplacePage({
             </div>
           ) : (
             <div
-              className="card"
-              style={{ padding: 0, overflowX: "auto", marginBottom: 24 }}
+              className="card table-scroll"
+              style={{ padding: 0, marginBottom: 24 }}
             >
               <table className="table">
                 <thead>
@@ -495,6 +721,84 @@ export default function WorkplacePage({
         </div>
       </div>
 
+      {showEditWorkplace && (
+        <Modal
+          title="Edit workplace"
+          description="Update the name, location and clock-in fence of this workplace."
+          onClose={() => setShowEditWorkplace(false)}
+          footer={
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowEditWorkplace(false)}
+                disabled={editSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveWorkplace}
+                disabled={editSubmitting}
+              >
+                {editSubmitting ? "Saving…" : "Save changes"}
+              </button>
+            </>
+          }
+        >
+          {editError && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert>{editError}</Alert>
+            </div>
+          )}
+          <form onSubmit={handleSaveWorkplace}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="workplace-name">
+                Workplace name
+              </label>
+              <input
+                id="workplace-name"
+                type="text"
+                className="form-input"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                disabled={editSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">
+                Location — click the map or search for the address
+              </label>
+              <MapPicker
+                value={editLocation}
+                onChange={setEditLocation}
+                radiusMeters={editRadius}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="workplace-radius">
+                Clock-in fence radius: <strong>{editRadius} m</strong>
+              </label>
+              <input
+                id="workplace-radius"
+                type="range"
+                min={50}
+                max={2000}
+                step={10}
+                className="form-input"
+                value={editRadius}
+                onChange={(e) => setEditRadius(Number(e.target.value))}
+                disabled={editSubmitting}
+              />
+              <div className="muted small">
+                Workers must be within this distance of the location for their
+                time entry to be logged as on-site. Entries outside are still
+                allowed but flagged.
+              </div>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {showCreateProject && (
         <Modal
           title="Create project"
@@ -539,32 +843,144 @@ export default function WorkplacePage({
                 disabled={projectSubmitting}
               />
             </div>
-            <div className="grid-2" style={{ gap: 12 }}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="project-start">
-                  Start date
-                </label>
-                <input
-                  id="project-start"
-                  type="date"
-                  className="form-input"
-                  value={projectStartDate}
-                  onChange={(e) => setProjectStartDate(e.target.value)}
-                  disabled={projectSubmitting}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="project-deadline">
-                  Deadline
-                </label>
-                <input
-                  id="project-deadline"
-                  type="date"
-                  className="form-input"
-                  value={projectDeadline}
-                  onChange={(e) => setProjectDeadline(e.target.value)}
-                  disabled={projectSubmitting}
-                />
+            <div className="form-group">
+              <label className="form-label" htmlFor="project-start">
+                Start date
+              </label>
+              <input
+                id="project-start"
+                type="date"
+                className="form-input"
+                value={projectStartDate}
+                onChange={(e) => setProjectStartDate(e.target.value)}
+                disabled={projectSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="project-deadline">
+                Deadline
+              </label>
+              <input
+                id="project-deadline"
+                type="date"
+                className="form-input"
+                value={projectDeadline}
+                onChange={(e) => setProjectDeadline(e.target.value)}
+                disabled={projectSubmitting}
+              />
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showEditProject && (
+        <Modal
+          title="Edit project"
+          description={`Update details for ${
+            editProjectName || "this project"
+          }.`}
+          onClose={() => setShowEditProject(false)}
+          footer={
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowEditProject(false)}
+                disabled={editProjectSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleEditProject}
+                disabled={editProjectSubmitting}
+              >
+                {editProjectSubmitting ? "Saving…" : "Save changes"}
+              </button>
+            </>
+          }
+        >
+          {editProjectError && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert>{editProjectError}</Alert>
+            </div>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEditProject();
+            }}
+          >
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-name">
+                Project name
+              </label>
+              <input
+                id="edit-project-name"
+                type="text"
+                className="form-input"
+                placeholder="e.g. Website redesign"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                disabled={editProjectSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-start">
+                Start date
+              </label>
+              <input
+                id="edit-project-start"
+                type="date"
+                className="form-input"
+                value={editProjectStartDate}
+                onChange={(e) => setEditProjectStartDate(e.target.value)}
+                disabled={editProjectSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-project-deadline">
+                Deadline
+              </label>
+              <input
+                id="edit-project-deadline"
+                type="date"
+                className="form-input"
+                value={editProjectDeadline}
+                onChange={(e) => setEditProjectDeadline(e.target.value)}
+                disabled={editProjectSubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                {PROJECT_STATUSES.map((status) => (
+                  <label
+                    key={status}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      cursor: editProjectSubmitting ? "not-allowed" : "pointer",
+                      padding: "6px 8px",
+                      borderRadius: 8,
+                      border:
+                        editProjectStatus === status
+                          ? "1px solid var(--color-primary)"
+                          : "1px solid transparent",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="edit-project-status"
+                      checked={editProjectStatus === status}
+                      onChange={() => setEditProjectStatus(status)}
+                      disabled={editProjectSubmitting}
+                    />
+                    <StatusBadge status={status} />
+                  </label>
+                ))}
               </div>
             </div>
           </form>

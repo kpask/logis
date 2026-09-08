@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Location } from "./types";
@@ -6,6 +12,12 @@ import type { Location } from "./types";
 interface MapPickerProps {
   value: Location | null;
   onChange: (location: Location | null) => void;
+  /**
+   * Optional geofence radius in meters. When provided (and >= 0), a circle
+   * of that size is drawn around the marker — used to preview the workplace
+   * clock-in fence.
+   */
+  radiusMeters?: number | null;
 }
 
 const DEFAULT_CENTER: [number, number] = [54.6872, 25.2797]; // Vilnius
@@ -20,10 +32,15 @@ const DEFAULT_ZOOM = 6;
  * - Search for an address to jump to it.
  * - Reverse-geocodes the picked point into city/street/address.
  */
-export default function MapPicker({ value, onChange }: MapPickerProps) {
+export default function MapPicker({
+  value,
+  onChange,
+  radiusMeters,
+}: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const fenceRef = useRef<L.Circle | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -53,8 +70,44 @@ export default function MapPicker({ value, onChange }: MapPickerProps) {
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
+      fenceRef.current = null;
     };
   }, []);
+
+  // Draw/update the fence circle around the marker.
+  const drawFence = useCallback(() => {
+    const map = mapRef.current;
+    if (
+      !map ||
+      !markerRef.current ||
+      radiusMeters == null ||
+      radiusMeters < 0
+    ) {
+      if (fenceRef.current) {
+        fenceRef.current.remove();
+        fenceRef.current = null;
+      }
+      return;
+    }
+    const pos = markerRef.current.getLatLng();
+    if (fenceRef.current) {
+      fenceRef.current.setLatLng(pos);
+      fenceRef.current.setRadius(radiusMeters);
+    } else {
+      fenceRef.current = L.circle(pos, {
+        radius: radiusMeters,
+        color: "#2f7d32",
+        fillColor: "#2f7d32",
+        fillOpacity: 0.12,
+        weight: 2,
+      }).addTo(map);
+    }
+  }, [radiusMeters]);
+
+  // Sync the fence circle whenever the radius changes.
+  useEffect(() => {
+    drawFence();
+  }, [drawFence, value?.latitude, value?.longitude]);
 
   // Sync the marker whenever the parent passes new coordinates.
   useEffect(() => {
@@ -66,9 +119,9 @@ export default function MapPicker({ value, onChange }: MapPickerProps) {
     ) {
       return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     placeMarker(value.latitude, value.longitude, false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    drawFence();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value?.latitude, value?.longitude]);
 
   function placeMarker(lat: number, lng: number, reverse: boolean) {
@@ -124,7 +177,9 @@ export default function MapPicker({ value, onChange }: MapPickerProps) {
         longitude: lng,
         city,
         street: road,
-        address: houseNumber ? `${road ? road + ", " : ""}${houseNumber}` : road,
+        address: houseNumber
+          ? `${road ? road + ", " : ""}${houseNumber}`
+          : road,
       });
     } catch {
       setDisplayName("");
@@ -164,7 +219,9 @@ export default function MapPicker({ value, onChange }: MapPickerProps) {
   }
 
   const hasCoords =
-    value && Number.isFinite(value.latitude) && Number.isFinite(value.longitude);
+    value &&
+    Number.isFinite(value.latitude) &&
+    Number.isFinite(value.longitude);
 
   return (
     <div className="map-picker">
@@ -194,7 +251,10 @@ export default function MapPicker({ value, onChange }: MapPickerProps) {
         <div className="map-coords">
           Lat: {value.latitude.toFixed(5)}, Lng: {value.longitude.toFixed(5)}
           {displayName || value.city || value.address
-            ? ` · ${displayName || [value.city, value.address].filter(Boolean).join(", ")}`
+            ? ` · ${
+                displayName ||
+                [value.city, value.address].filter(Boolean).join(", ")
+              }`
             : ""}
         </div>
       )}

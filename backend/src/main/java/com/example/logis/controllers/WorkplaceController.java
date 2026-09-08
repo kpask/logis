@@ -1,10 +1,7 @@
 package com.example.logis.controllers;
 
 import com.example.logis.data.User;
-import com.example.logis.dtos.CreateWorkplaceRequest;
-import com.example.logis.dtos.ProjectResponse;
-import com.example.logis.dtos.UserResponse;
-import com.example.logis.dtos.WorkplaceResponse;
+import com.example.logis.dtos.*;
 import com.example.logis.services.ProjectService;
 import com.example.logis.services.WorkplaceService;
 import jakarta.validation.Valid;
@@ -46,6 +43,12 @@ public class WorkplaceController {
     public List<ProjectResponse> getWorkplaceProjects(@PathVariable long id, Authentication authentication){
         Long userId = ((User) authentication.getPrincipal()).getId();
         return projectService.getWorkplaceProjectsByWorkplaceIdAndUser(id, userId);
+    }
+
+    @PutMapping("/workplaces/{id}")
+    public WorkplaceResponse updateWorkplace(@PathVariable long id, @RequestBody @Valid UpdateWorkplaceRequest request, Authentication authentication){
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return workplaceService.updateWorkplace(id, userId, request);
     }
 
     @DeleteMapping("/workplaces/{id}")

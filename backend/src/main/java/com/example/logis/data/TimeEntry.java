@@ -1,4 +1,5 @@
 package com.example.logis.data;
+import com.example.logis.data.enums.TimeEntryLogStatus;
 import jakarta.persistence.*;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,19 +14,26 @@ public class TimeEntry {
     private Instant startTime;
     private Instant endTime;
     private Long lunchLength = 30L;
+    @Enumerated(EnumType.STRING)
+    private TimeEntryLogStatus status = TimeEntryLogStatus.LOGGED;
 
     public TimeEntry(ProjectWorker projectWorker) {
-        this(projectWorker, Instant.now(), null);
+        this(projectWorker, Instant.now(), null, TimeEntryLogStatus.LOGGED);
+    }
+
+    public TimeEntry(ProjectWorker projectWorker, TimeEntryLogStatus status) {
+        this(projectWorker, Instant.now(), null, status);
     }
 
     public TimeEntry(ProjectWorker projectWorker, Instant startTime) {
-        this(projectWorker, startTime, null);
+        this(projectWorker, startTime, null, TimeEntryLogStatus.LOGGED);
     }
 
-    public TimeEntry(ProjectWorker projectWorker, Instant startTime, Instant endTime) {
+    public TimeEntry(ProjectWorker projectWorker, Instant startTime, Instant endTime, TimeEntryLogStatus status) {
         this.projectWorker = projectWorker;
         this.startTime = startTime;
         this.endTime = endTime;
+        this.status = status;
     }
 
     protected TimeEntry() {
@@ -83,5 +91,13 @@ public class TimeEntry {
             return;
         }
         this.lunchLength = lunchLength;
+    }
+
+    public TimeEntryLogStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(TimeEntryLogStatus status) {
+        this.status = status;
     }
 }

@@ -1,5 +1,7 @@
 package com.example.logis.dtos;
 
+import com.example.logis.data.enums.TimeEntryLogStatus;
+
 import java.time.Instant;
 
 public record TimeEntryResponse(
@@ -10,5 +12,6 @@ public record TimeEntryResponse(
         Instant startTime,
         Instant endTime,
         long duration,
-        long lunchLength
+        long lunchLength,
+        TimeEntryLogStatus status
 ) {}

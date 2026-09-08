@@ -57,11 +57,21 @@ export interface WorkplaceResponse {
   name: string;
   location: Location | null;
   companyId: number;
+  /** Geofence radius in meters (backend field: radiusMeters). */
+  radiusDistance: number;
 }
 
 export interface CreateWorkplaceRequest {
   name: string;
   location: Location | null;
+  radiusDistance: number | null;
+}
+
+/** Body for updating a workplace (managers only). Omitted fields keep their values. */
+export interface UpdateWorkplaceRequest {
+  name: string;
+  location: Location | null;
+  radiusDistance: number | null;
 }
 
 /**
@@ -90,6 +100,23 @@ export interface CreateProjectRequest {
   deadline: string | null;
 }
 
+/** Body for updating an existing project (managers only). */
+export interface UpdateProjectRequest {
+  projectName: string;
+  startDate: string | null;
+  deadline: string | null;
+  projectStatus: ProjectStatus;
+}
+
+/**
+ * How a time entry was logged — mirrors the backend TimeEntryLogStatus enum.
+ */
+export type TimeEntryLogStatus =
+  | "LOGGED" // normal timer start/stop by the worker
+  | "LOGGED_OUTSIDE" // timer started outside the workplace geofence (or without coords)
+  | "MANUAL_ENTRY" // created by hand by a manager
+  | "EDITED"; // times changed after logging
+
 export interface TimeEntryResponse {
   id: number;
   projectWorkerId: number;
@@ -105,6 +132,15 @@ export interface TimeEntryResponse {
    */
   duration: number | { seconds: number; nano: number } | string | null;
   lunchLength: number;
+  status: TimeEntryLogStatus;
+}
+
+/** Body for starting the timer. Coordinates are optional — the backend
+ *  flags the entry LOGGED_OUTSIDE when they are missing or outside the
+ *  workplace geofence. */
+export interface StartTimeEntryRequest {
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /** Body for creating a manual time entry (managers only). */

@@ -185,6 +185,54 @@ export function effectiveDurationSeconds(
  * Compute the elapsed seconds between an ISO start time and now.
  * Returns 0 when the start time cannot be parsed.
  */
+/**
+ * Great-circle distance between two WGS-84 points, in meters (haversine).
+ * Mirrors the backend's `TimeTrackingService.distanceMeters`.
+ */
+export function distanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const earthRadius = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * earthRadius * Math.asin(Math.sqrt(a));
+}
+
+function toRad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+/**
+ * The browser's current position, or null when geolocation is unsupported,
+ * denied, or fails/times out. Resolves after at most ~10 seconds.
+ */
+export function getBrowserPosition(): Promise<{
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+} | null> {
+  return new Promise((resolve) => {
+    if (!("geolocation" in navigator)) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        resolve({ latitude, longitude, accuracy });
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  });
+}
+
 export function elapsedSecondsFrom(isoInstant: string | null): number {
   const start = parseDate(isoInstant);
   if (!start) return 0;

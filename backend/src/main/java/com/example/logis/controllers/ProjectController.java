@@ -30,6 +30,19 @@ public class ProjectController {
         return projectService.getProjectByProjectIdAntUser(id, userId);
     }
 
+    @PutMapping("/project/{id}")
+    public ProjectResponse updateProject(@PathVariable long id, @RequestBody @Valid UpdateProjectRequest request, Authentication authentication){
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return projectService.updateProject(id, userId, request);
+    }
+
+    @DeleteMapping("/project/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteProject(@PathVariable long id, Authentication authentication){
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        projectService.deleteProject(id, userId);
+    }
+
     @PostMapping("/project/{id}/assign/{workerId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void assignWorker(@PathVariable long id, @PathVariable long workerId, Authentication authentication){

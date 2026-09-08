@@ -15,8 +15,9 @@ public class Workplace {
     private Location location;
     @ManyToOne
     private Company company;
-    @ManyToMany
-    private List<User> managers = new ArrayList<>();
+    @OneToMany(mappedBy = "workplace", cascade = CascadeType.ALL, orphanRemoval = true)
+    private final List<Project> projects = new ArrayList<>();
+    private double radiusMeters = 150.0;
 
     public Workplace(String name, Location location, Company company){
         this.name = name;
@@ -24,11 +25,11 @@ public class Workplace {
         this.company = company;
     }
 
-    public Workplace(String name, Location location, Company company, List<User> managers){
+    public Workplace(String name, Location location, Company company, double radiusMeters){
         this.name = name;
         this.location = location;
         this.company = company;
-        this.managers = managers;
+        this.radiusMeters = radiusMeters;
     }
 
     protected Workplace() {
@@ -36,14 +37,6 @@ public class Workplace {
 
     public Company getCompany() {
         return company;
-    }
-
-    public List<User> getManagers() {
-        return managers;
-    }
-
-    public void setManagers(List<User> managers) {
-        this.managers = managers;
     }
 
     public long getId() {
@@ -64,5 +57,20 @@ public class Workplace {
 
     public void setLocation(Location location) {
         this.location = location;
+    }
+
+    public double getRadiusMeters() {
+        return radiusMeters;
+    }
+
+    public void setRadiusMeters(double radiusMeters) {
+        if(radiusMeters < 0){
+            return;
+        }
+        this.radiusMeters = radiusMeters;
+    }
+
+    public List<Project> getProjects() {
+        return projects;
     }
 }

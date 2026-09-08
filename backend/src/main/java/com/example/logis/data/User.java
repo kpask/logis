@@ -1,5 +1,6 @@
 package com.example.logis.data;
 
+import com.example.logis.data.enums.CompanyRole;
 import jakarta.persistence.*;
 
 @Entity
@@ -127,11 +128,10 @@ public class User {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof User)) {
+        if (!(o instanceof User other)) {
             return false;
         }
 
-        User other = (User) o;
         if (id == null) {
             return false;
         }

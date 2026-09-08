@@ -1,6 +1,6 @@
 package com.example.logis.dtos;
 
-import com.example.logis.data.InvitationStatus;
+import com.example.logis.data.enums.InvitationStatus;
 
 import java.time.LocalDateTime;
 

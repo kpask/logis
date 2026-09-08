@@ -18,8 +18,11 @@ import type {
   LoginResponse,
   ProjectResponse,
   ProjectStatus,
+  StartTimeEntryRequest,
   TimeEntryResponse,
   UpdateTimeEntryRequest,
+  UpdateWorkplaceRequest,
+  UpdateProjectRequest,
   UserResponse,
   WorkplaceResponse,
 } from "./types";
@@ -30,8 +33,14 @@ import type {
 //   served from the developer machine (e.g. http://192.168.1.9:5173)
 //   will point API calls to the same device on the common backend port.
 // - Falls back to http://localhost:8080 for node-side usage or unknown env.
-const _VITE_API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE) || "";
-const _VITE_API_PORT = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_PORT) || "8080";
+const _VITE_API_BASE =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_API_BASE) ||
+  "";
+const _VITE_API_PORT =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.VITE_API_PORT) ||
+  "8080";
 
 const API_BASE: string = (() => {
   if (_VITE_API_BASE) return _VITE_API_BASE;
@@ -138,11 +147,24 @@ export const companiesApi = {
   create: (req: CreateCompanyRequest) =>
     request<CompanyResponse>("POST", "/company", req),
 
-  get: (_companyId?: number) =>
-    request<CompanyResponse>("GET", "/company/"),
+  get: (_companyId?: number) => request<CompanyResponse>("GET", "/company/"),
 
   getMembers: (_companyId?: number) =>
     request<UserResponse[]>("GET", "/company/members"),
+
+  /** Promote a company member to manager (managers only). */
+  promote: (userId: number) =>
+    request<void>("POST", `/company/manager/${userId}`),
+
+  /** Remove a member from the company (managers only). */
+  kick: (userId: number) => request<void>("POST", `/company/kick/${userId}`),
+
+  /**
+   * Users with project-assignment history at the company who are no longer
+   * members (managers only).
+   */
+  getFormerMembers: () =>
+    request<UserResponse[]>("GET", "/company/former-members"),
 };
 
 // ── Workplaces ───────────────────────────────────────────────
@@ -152,6 +174,13 @@ export const workplacesApi = {
     request<WorkplaceResponse>("POST", "/workplace", req),
 
   get: (id: number) => request<WorkplaceResponse>("GET", `/workplaces/${id}`),
+
+  /** Update a workplace's name/location/fence radius (managers only). */
+  update: (id: number, req: UpdateWorkplaceRequest) =>
+    request<WorkplaceResponse>("PUT", `/workplaces/${id}`, req),
+
+  /** Delete a workplace and all of its data (managers only). */
+  delete: (id: number) => request<void>("DELETE", `/workplaces/${id}`),
 
   /**
    * Workplaces visible to the logged-in user — the backend scopes the
@@ -171,6 +200,10 @@ export const projectsApi = {
 
   get: (id: number) => request<ProjectResponse>("GET", `/project/${id}`),
 
+  /** Update a project's name/start date/deadline (managers only). */
+  update: (id: number, req: UpdateProjectRequest) =>
+    request<ProjectResponse>("PUT", `/project/${id}`, req),
+
   updateStatus: (projectId: number, status: ProjectStatus) =>
     request<ProjectResponse>("POST", `/project/${projectId}/status`, {
       status,
@@ -187,6 +220,9 @@ export const projectsApi = {
   /** Remove a worker from the project (managers only). */
   removeWorker: (projectId: number, workerId: number) =>
     request<void>("DELETE", `/project/${projectId}/workers/${workerId}`),
+
+  /** Delete a project and all of its data (managers only). */
+  delete: (id: number) => request<void>("DELETE", `/project/${id}`),
 };
 
 // ── Invitations ──────────────────────────────────────────────
@@ -210,16 +246,28 @@ export const invitationsApi = {
 // ── Time tracking ────────────────────────────────────────────
 
 export const timeTrackingApi = {
-  start: (projectId: number) =>
+  /**
+   * Start the timer. Coordinates are optional — the backend flags the entry
+   * LOGGED_OUTSIDE when they are missing or outside the workplace geofence.
+   */
+  start: (projectId: number, coords: StartTimeEntryRequest) =>
     request<TimeEntryResponse>(
       "POST",
-      `/projects/${projectId}/time-entries/start`
+      `/projects/${projectId}/time-entries/start`,
+      coords
     ),
 
   stop: (timeEntryId: number) =>
     request<TimeEntryResponse>("POST", `/me/time-entries/${timeEntryId}/stop`),
 
   getMine: () => request<TimeEntryResponse[]>("GET", "/me/time-entries"),
+
+  /**
+   * All time entries of a company member across every project. Managers may
+   * view any member of their company; regular users only their own.
+   */
+  getByUser: (userId: number) =>
+    request<TimeEntryResponse[]>("GET", `/time-entries/${userId}`),
 
   /**
    * Time entries for a workplace. The backend decides the scope:

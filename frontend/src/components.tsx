@@ -2,7 +2,13 @@
 // Logis — Shared UI components
 // ============================================================
 
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { ProjectStatus, UserResponse } from "./types";
 import {
   fetchLithuanianHolidayDateKeys,
@@ -265,6 +271,117 @@ export function MonthCalendar({
   );
 }
 
+// ── Context menu (⋮ dropdown) ────────────────────────────────
+
+export interface DropdownMenuItem {
+  label: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+interface DropdownMenuProps {
+  items: DropdownMenuItem[];
+  disabled?: boolean;
+  title?: string;
+}
+
+/**
+ * A "⋮" trigger that opens a small fixed-position context menu
+ * (like a desktop right-click). Fixed positioning is required so the
+ * menu escapes scrollable containers (e.g. table cards with
+ * `overflow: auto`) that would clip an absolutely-positioned dropdown.
+ */
+export function DropdownMenu({ items, disabled, title }: DropdownMenuProps) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(e: MouseEvent) {
+      // Ignore clicks inside the menu popup or on the trigger.
+      const target = e.target as HTMLElement;
+      if (target.closest(".dropdown-menu-popup")) return;
+      if (triggerRef.current?.contains(target)) return;
+      close();
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    function onScroll() {
+      close();
+    }
+
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open, close]);
+
+  function toggle() {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      // Open below-left of the trigger, clamped to the viewport.
+      const menuWidth = 190;
+      const top = Math.min(rect.bottom + 4, window.innerHeight - 8);
+      const left = Math.max(
+        8,
+        Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)
+      );
+      setPosition({ top, left });
+    }
+    setOpen((o) => !o);
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="btn btn-secondary btn-sm dropdown-trigger"
+        onClick={toggle}
+        disabled={disabled}
+        title={title ?? "Actions"}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <IconDots />
+      </button>
+      {open && (
+        <div
+          className="dropdown-menu-popup"
+          role="menu"
+          style={{ top: position.top, left: position.left }}
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={`dropdown-item${item.danger ? " danger" : ""}`}
+              disabled={item.disabled}
+              onClick={() => {
+                close();
+                item.onSelect();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Member filter (managers only) ────────────────────────────
 
 /** "all" shows every member's entries; a number filters to that user id. */
@@ -520,6 +637,16 @@ export function IconStop() {
   );
 }
 
+export function IconDots() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="5" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="12" cy="19" r="1.8" />
+    </svg>
+  );
+}
+
 export function IconUsers() {
   return (
     <svg
@@ -536,6 +663,27 @@ export function IconUsers() {
       <path d="M1 21c0-4 3.6-6 8-6s8 2 8 6" />
       <path d="M16 3.5a4 4 0 0 1 0 7.5" />
       <path d="M19 15.5c2.4.8 4 2.4 4 5.5" />
+    </svg>
+  );
+}
+
+export function IconTrash() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
     </svg>
   );
 }

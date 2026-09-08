@@ -34,6 +34,13 @@ public class CompanyController {
         companyService.makeCompanyManager(id, promoterId);
     }
 
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PostMapping("/company/kick/{id}")
+    public void kick(Authentication authentication, @PathVariable @Positive long id){
+        User user = (User) authentication.getPrincipal();
+        companyService.kick(id, user.getId());
+    }
+
     @GetMapping("/company/")
     public CompanyResponse getCompany(Authentication authentication){
         Long userId = ((User) authentication.getPrincipal()).getId();
@@ -50,5 +57,11 @@ public class CompanyController {
     public List<UserResponse> getMembers(Authentication authentication){
         Long requesterId = ((User) authentication.getPrincipal()).getId();
         return companyService.getMembersByUser(requesterId);
+    }
+
+    @GetMapping("/company/former-members")
+    public List<UserResponse> getFormerMembers(Authentication authentication){
+        Long requesterId = ((User) authentication.getPrincipal()).getId();
+        return companyService.getFormerMembersByUser(requesterId);
     }
 }

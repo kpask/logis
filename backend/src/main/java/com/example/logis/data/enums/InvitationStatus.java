@@ -1,4 +1,4 @@
-package com.example.logis.data;
+package com.example.logis.data.enums;
 
 public enum InvitationStatus {
     PENDING,

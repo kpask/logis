@@ -1,7 +1,7 @@
 package com.example.logis.services;
 
 import com.example.logis.data.CompanyInvitation;
-import com.example.logis.data.InvitationStatus;
+import com.example.logis.data.enums.InvitationStatus;
 import com.example.logis.data.User;
 import com.example.logis.dtos.*;
 import com.example.logis.exceptions.EmailAlreadyExistsException;

@@ -1,6 +1,8 @@
 package com.example.logis.services;
 
 import com.example.logis.data.*;
+import com.example.logis.data.enums.CompanyRole;
+import com.example.logis.data.enums.InvitationStatus;
 import com.example.logis.dtos.AddUserToCompanyRequest;
 import com.example.logis.dtos.InvitationResponse;
 import com.example.logis.exceptions.ForbiddenActionException;

@@ -42,10 +42,12 @@ public class UserService {
     @Transactional
     public UserResponse getUserByIdAndUser(Long id, Long requesterId){
         User requester = findUser(requesterId);
-        if (requester.getCompany() == null || !requester.getCompany().getUsers().contains(findUser(id))) {
+        User target = findUser(id);
+        if (requester.getCompany() == null || target.getCompany() == null
+                || !requester.getCompany().getId().equals(target.getCompany().getId())) {
             throw new IllegalArgumentException("User is not in the same company as the requested user");
         }
-        return getUserById(id);
+        return toResponse(target);
     }
 
     public UserResponse getUserById(Long id){

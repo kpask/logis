@@ -1,8 +1,7 @@
 package com.example.logis.repository;
 
 import com.example.logis.data.CompanyInvitation;
-import com.example.logis.data.InvitationStatus;
-import com.example.logis.data.Workplace;
+import com.example.logis.data.enums.InvitationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

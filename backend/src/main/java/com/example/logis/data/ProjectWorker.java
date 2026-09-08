@@ -16,8 +16,7 @@ public class ProjectWorker {
     private Project project;
     private LocalDate assignedAt;
     private LocalDate endDate;
-
-    @OneToMany
+    @OneToMany(mappedBy = "projectWorker", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimeEntry> timeEntries;
 
     public ProjectWorker(){};

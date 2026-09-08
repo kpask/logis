@@ -1,5 +1,6 @@
 package com.example.logis.data;
 
+import com.example.logis.data.enums.ProjectStatus;
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
@@ -15,9 +16,8 @@ public class Project {
     private LocalDate startDate;
     private LocalDate deadline;
     @ManyToOne
-    @JoinColumn(name = "workplace_id")
     private Workplace workplace;
-    @OneToMany(mappedBy = "project")
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProjectWorker> projectWorkers = new ArrayList<>();
     @Enumerated(EnumType.STRING)
     private ProjectStatus projectStatus = ProjectStatus.ON_HOLD;
