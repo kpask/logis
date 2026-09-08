@@ -1,9 +1,9 @@
 package com.example.logis.services;
 
-import com.example.logis.data.Company;
+import com.example.logis.data.entities.Company;
 import com.example.logis.data.enums.CompanyRole;
-import com.example.logis.data.User;
-import com.example.logis.dtos.UserResponse;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.exceptions.UserNotFoundException;
 import com.example.logis.repository.UserRepository;
 import org.junit.jupiter.api.Test;

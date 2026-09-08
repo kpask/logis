@@ -1,13 +1,13 @@
 package com.example.logis.services;
 
-import com.example.logis.data.Company;
+import com.example.logis.data.entities.Company;
 import com.example.logis.data.enums.CompanyRole;
-import com.example.logis.data.Location;
-import com.example.logis.data.User;
-import com.example.logis.data.Workplace;
-import com.example.logis.dtos.CreateWorkplaceRequest;
-import com.example.logis.dtos.UpdateWorkplaceRequest;
-import com.example.logis.dtos.WorkplaceResponse;
+import com.example.logis.data.entities.Location;
+import com.example.logis.data.entities.User;
+import com.example.logis.data.entities.Workplace;
+import com.example.logis.dtos.requests.CreateWorkplaceRequest;
+import com.example.logis.dtos.requests.UpdateWorkplaceRequest;
+import com.example.logis.dtos.responses.WorkplaceResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.WorkplaceNotFoundException;
 import com.example.logis.repository.WorkplaceRepository;

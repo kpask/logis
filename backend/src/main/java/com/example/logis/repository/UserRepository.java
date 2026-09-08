@@ -1,6 +1,6 @@
 package com.example.logis.repository;
 
-import com.example.logis.data.User;
+import com.example.logis.data.entities.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

@@ -1,7 +1,10 @@
 package com.example.logis.controllers;
 
-import com.example.logis.data.User;
-import com.example.logis.dtos.*;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.CreateWorkplaceRequest;
+import com.example.logis.dtos.responses.ProjectResponse;
+import com.example.logis.dtos.requests.UpdateWorkplaceRequest;
+import com.example.logis.dtos.responses.WorkplaceResponse;
 import com.example.logis.services.ProjectService;
 import com.example.logis.services.WorkplaceService;
 import jakarta.validation.Valid;

@@ -1,7 +1,8 @@
 package com.example.logis.services;
 
 import com.example.logis.data.enums.CompanyRole;
-import com.example.logis.data.User;
+import com.example.logis.data.entities.User;
+import com.example.logis.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 

@@ -1,15 +1,16 @@
 package com.example.logis.services;
 
-import com.example.logis.data.*;
+import com.example.logis.data.entities.*;
 import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.enums.TimeEntryLogStatus;
-import com.example.logis.dtos.CreateTimeEntryRequest;
-import com.example.logis.dtos.StartTimeEntryRequest;
-import com.example.logis.dtos.TimeEntryResponse;
-import com.example.logis.dtos.UpdateTimeEntryRequest;
+import com.example.logis.dtos.requests.CreateTimeEntryRequest;
+import com.example.logis.dtos.requests.StartTimeEntryRequest;
+import com.example.logis.dtos.responses.TimeEntryResponse;
+import com.example.logis.dtos.requests.UpdateTimeEntryRequest;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.TimeEntryNotFoundException;
 import com.example.logis.repository.TimeTrackingRepository;
+import com.example.logis.util.AuthorizationHelper;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -72,8 +73,7 @@ public class TimeTrackingService {
         TimeEntry timeEntry = timeTrackingRepository.findById(id)
                 .orElseThrow(() -> new TimeEntryNotFoundException(id));
 
-        boolean requesterIsManager = user.getRole().equals(CompanyRole.MANAGER) && timeEntry.getProjectWorker().getProject().getWorkplace().getCompany().getId().equals(user.getCompany().getId());
-        if(!timeEntry.getProjectWorker().getWorker().getId().equals(user.getId()) && !requesterIsManager){
+        if(!timeEntry.getProjectWorker().getWorker().getId().equals(user.getId()) && !AuthorizationHelper.isManagerOfCompany(user, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("Only the worker who started this timer can stop it");
         }
 
@@ -187,9 +187,7 @@ public class TimeTrackingService {
         ProjectWorker projectWorker = projectService.findProjectWorker(projectId, request.workerId())
                 .orElseThrow(() -> new ForbiddenActionException("User " + request.workerId() + " is not on project " + projectId));
 
-        boolean requesterIsManager = user.getRole().equals(CompanyRole.MANAGER) && projectWorker.getProject().getWorkplace().getCompany().getManagers().contains(user);
-
-        if(!requesterIsManager){
+        if(!AuthorizationHelper.isManagerOfCompany(user, projectWorker.getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to create time entries for this project.");
         }
         if(projectWorker.getEndDate() != null){
@@ -222,8 +220,7 @@ public class TimeTrackingService {
         TimeEntry timeEntry = timeTrackingRepository.findById(timeEntryId)
                 .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
 
-        boolean requesterIsManager = requester.getRole().equals(CompanyRole.MANAGER) && timeEntry.getProjectWorker().getProject().getWorkplace().getCompany().getManagers().contains(requester);
-        if(!requesterIsManager){
+        if(!AuthorizationHelper.isManagerOfCompany(requester, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to update this time entry.");
         }
 
@@ -254,8 +251,7 @@ public class TimeTrackingService {
         TimeEntry timeEntry = timeTrackingRepository.findById(timeEntryId)
                 .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
 
-        boolean requesterIsManager = requester.getRole().equals(CompanyRole.MANAGER) && timeEntry.getProjectWorker().getProject().getWorkplace().getCompany().getManagers().contains(requester);
-        if(!requesterIsManager){
+        if(!AuthorizationHelper.isManagerOfCompany(requester, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to delete this time entry.");
         }
 

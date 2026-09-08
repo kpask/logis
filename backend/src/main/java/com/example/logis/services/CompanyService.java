@@ -1,9 +1,12 @@
 package com.example.logis.services;
 
-import com.example.logis.data.Company;
+import com.example.logis.data.entities.Company;
 import com.example.logis.data.enums.CompanyRole;
-import com.example.logis.data.User;
-import com.example.logis.dtos.*;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.CreateCompanyRequest;
+import com.example.logis.dtos.requests.AddUserToCompanyRequest;
+import com.example.logis.dtos.responses.CompanyResponse;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.exceptions.CompanyNotFoundException;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.UserNotFoundException;
@@ -26,6 +29,7 @@ public class CompanyService {
     private final TimeTrackingRepository timeTrackingRepository;
     private final UserRepository userRepository;
     private final UserService userService;
+    
     public CompanyService(CompanyRepository companyRepository, UserRepository userRepository, UserService userService, ProjectWorkerRepository projectWorkerRepository, TimeTrackingRepository timeTrackingRepository){
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
@@ -41,7 +45,7 @@ public class CompanyService {
         Company company = companyRepository.findById(companyId).
                 orElseThrow(() -> new CompanyNotFoundException(companyId));
 
-        return new CompanyResponse(company.getId(), company.getName());
+        return toResponse(company);
     }
 
     @Transactional
@@ -50,7 +54,7 @@ public class CompanyService {
         if(user.getCompany() == null){
             throw new IllegalArgumentException("User is not associated with any company");
         }
-        return new CompanyResponse(user.getCompany().getId(), user.getCompany().getName());
+        return toResponse(user.getCompany());
     }
 
     public Company findCompany(Long companyId){
@@ -93,10 +97,7 @@ public class CompanyService {
         manager.setCompany(savedCompany);
         manager.setRole(CompanyRole.MANAGER);
         userRepository.save(manager);
-        return new CompanyResponse(
-                savedCompany.getId(),
-                savedCompany.getName()
-        );
+        return toResponse(savedCompany);
     }
 
     public int getWorkerCountByCompanyId(long companyId){
@@ -116,6 +117,10 @@ public class CompanyService {
         return userRepository.findByCompanyId(companyId).stream()
                 .map(userService::toResponse)
                 .toList();
+    }
+
+    private CompanyResponse toResponse(Company company) {
+        return new CompanyResponse(company.getId(), company.getName());
     }
 
     @Transactional

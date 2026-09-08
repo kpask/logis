@@ -1,10 +1,11 @@
 package com.example.logis.services;
 
-import com.example.logis.data.*;
+import com.example.logis.data.entities.CompanyInvitation;
+import com.example.logis.data.entities.User;
 import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.enums.InvitationStatus;
-import com.example.logis.dtos.AddUserToCompanyRequest;
-import com.example.logis.dtos.InvitationResponse;
+import com.example.logis.dtos.requests.AddUserToCompanyRequest;
+import com.example.logis.dtos.responses.InvitationResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.InvitationNotFoundException;
 import com.example.logis.repository.InviteRepository;

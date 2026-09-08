@@ -1,9 +1,9 @@
 package com.example.logis.controllers;
 
-import com.example.logis.data.User;
-import com.example.logis.dtos.CompanyResponse;
-import com.example.logis.dtos.CreateCompanyRequest;
-import com.example.logis.dtos.UserResponse;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.responses.CompanyResponse;
+import com.example.logis.dtos.requests.CreateCompanyRequest;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.services.CompanyService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;

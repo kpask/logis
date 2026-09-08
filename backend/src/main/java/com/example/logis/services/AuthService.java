@@ -1,12 +1,17 @@
 package com.example.logis.services;
 
-import com.example.logis.data.CompanyInvitation;
+import com.example.logis.data.entities.CompanyInvitation;
 import com.example.logis.data.enums.InvitationStatus;
-import com.example.logis.data.User;
-import com.example.logis.dtos.*;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.CreateInvitedUserRequest;
+import com.example.logis.dtos.requests.CreateUserRequest;
+import com.example.logis.dtos.requests.AddUserToCompanyRequest;
+import com.example.logis.dtos.requests.LoginRequest;
+import com.example.logis.dtos.responses.LoginResponse;
 import com.example.logis.exceptions.EmailAlreadyExistsException;
 import com.example.logis.exceptions.InvalidCredentialsException;
 import com.example.logis.exceptions.InvalidInvitationException;
+import com.example.logis.security.JwtService;
 import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

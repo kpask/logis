@@ -1,21 +1,21 @@
 package com.example.logis.services;
 
-import com.example.logis.data.Company;
-import com.example.logis.data.Project;
-import com.example.logis.data.enums.CompanyRole;
+import com.example.logis.data.entities.Company;
+import com.example.logis.data.entities.Project;
 import com.example.logis.data.enums.ProjectStatus;
-import com.example.logis.data.ProjectWorker;
-import com.example.logis.data.User;
-import com.example.logis.data.Workplace;
-import com.example.logis.dtos.CreateProjectRequest;
-import com.example.logis.dtos.ProjectResponse;
-import com.example.logis.dtos.UpdateProjectRequest;
-import com.example.logis.dtos.UserResponse;
+import com.example.logis.data.entities.ProjectWorker;
+import com.example.logis.data.entities.User;
+import com.example.logis.data.entities.Workplace;
+import com.example.logis.dtos.requests.CreateProjectRequest;
+import com.example.logis.dtos.responses.ProjectResponse;
+import com.example.logis.dtos.requests.UpdateProjectRequest;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.ProjectNotFoundException;
 import com.example.logis.exceptions.ResourceNotOwnedException;
 import com.example.logis.repository.ProjectRepository;
 import com.example.logis.repository.ProjectWorkerRepository;
+import com.example.logis.util.AuthorizationHelper;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
@@ -47,10 +47,10 @@ public class ProjectService {
         Company company = companyService.findCompany(creator.getCompany().getId());
         Workplace workplace = workplaceService.findWorkplace(request.workplaceId());
 
-        if(!company.getManagers().contains(creator)){
+        if(!AuthorizationHelper.isManagerOfCompany(creator, company)){
             throw new ForbiddenActionException("User " + creator.getId() + " is not authorized to create projects, because he is not a manager.");
         }
-        if(!workplace.getCompany().getId().equals(company.getId())){
+        if(!AuthorizationHelper.isWorkplaceOwnedByCompany(workplace, company)){
             throw new ResourceNotOwnedException("Workplace does not belong to the creator's company");
         }
         Project savedProject = projectRepository.save(new Project(
@@ -134,10 +134,10 @@ public class ProjectService {
         User assigner = userService.findUser(assignerId);
 
         Company company = companyService.findCompany(assigner.getCompany().getId());
-        if(!company.getManagers().contains(assigner)){
+        if(!AuthorizationHelper.isManagerOfCompany(assigner, company)){
             throw new ForbiddenActionException("User " + assigner.getId() + " is not authorized to assign workers, because he is not a manager.");
         }
-        if(!project.getWorkplace().getCompany().getId().equals(company.getId())){
+        if(!AuthorizationHelper.isWorkplaceOwnedByCompany(project.getWorkplace(), company)){
             throw new ResourceNotOwnedException("Project does not belong to the assigner's company");
         }
         if(worker.getCompany() == null || !worker.getCompany().getId().equals(company.getId())){
@@ -165,7 +165,7 @@ public class ProjectService {
         User user = userService.findUser(userId);
         Project project = findProject(id);
         if(!project.getWorkplace().getCompany().getUsers().contains(user)){
-            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view workers of this project, because he is not part of the company.");
+            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view this project, because he is not part of the company.");
         }
 
         return projectWorkerRepository.findByProject_Id(id).stream()
@@ -192,10 +192,10 @@ public class ProjectService {
         }
 
         Company company = companyService.findCompany(requester.getCompany().getId());
-        if(!company.getManagers().contains(requester)){
-            throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to remove workers, because he is not a manager.");
+        if(!AuthorizationHelper.isManagerOfCompany(requester, company)){
+            throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to modify the project, because he is not a manager.");
         }
-        if(!project.getWorkplace().getCompany().getId().equals(company.getId())){
+        if(!AuthorizationHelper.isWorkplaceOwnedByCompany(project.getWorkplace(), company)){
             throw new ResourceNotOwnedException("Project does not belong to the requester's company");
         }
 
@@ -210,9 +210,8 @@ public class ProjectService {
     public ProjectResponse updateProject(long projectId, Long userId, @Valid UpdateProjectRequest request) {
         User user = userService.findUser(userId);
         Project project = findProject(projectId);
-        Company company = companyService.findCompany(project.getWorkplace().getCompany().getId());
 
-        if(user.getRole().equals(CompanyRole.USER) || !company.getUsers().contains(user)){
+        if(!AuthorizationHelper.canModifyProject(user, project)){
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to update the project.");
         }
 
@@ -227,7 +226,7 @@ public class ProjectService {
     public void deleteProject(long id, Long userId) {
         User user = userService.findUser(userId);
         Project project = findProject(id);
-        if(user.getRole().equals(CompanyRole.USER) || !project.getWorkplace().getCompany().getId().equals(user.getCompany().getId())) {
+        if(!AuthorizationHelper.canModifyProject(user, project)) {
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to delete the project.");
         }
 

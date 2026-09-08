@@ -1,14 +1,14 @@
 package com.example.logis.services;
 
-import com.example.logis.data.Company;
+import com.example.logis.data.entities.Company;
 import com.example.logis.data.enums.CompanyRole;
-import com.example.logis.data.ProjectWorker;
-import com.example.logis.data.TimeEntry;
-import com.example.logis.data.User;
-import com.example.logis.dtos.AddUserToCompanyRequest;
-import com.example.logis.dtos.CompanyResponse;
-import com.example.logis.dtos.CreateCompanyRequest;
-import com.example.logis.dtos.UserResponse;
+import com.example.logis.data.entities.ProjectWorker;
+import com.example.logis.data.entities.TimeEntry;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.AddUserToCompanyRequest;
+import com.example.logis.dtos.responses.CompanyResponse;
+import com.example.logis.dtos.requests.CreateCompanyRequest;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.exceptions.CompanyNotFoundException;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.repository.CompanyRepository;

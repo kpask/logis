@@ -1,10 +1,10 @@
 package com.example.logis.controllers;
 
-import com.example.logis.data.User;
-import com.example.logis.dtos.CreateTimeEntryRequest;
-import com.example.logis.dtos.StartTimeEntryRequest;
-import com.example.logis.dtos.TimeEntryResponse;
-import com.example.logis.dtos.UpdateTimeEntryRequest;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.CreateTimeEntryRequest;
+import com.example.logis.dtos.requests.StartTimeEntryRequest;
+import com.example.logis.dtos.responses.TimeEntryResponse;
+import com.example.logis.dtos.requests.UpdateTimeEntryRequest;
 import com.example.logis.services.TimeTrackingService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;

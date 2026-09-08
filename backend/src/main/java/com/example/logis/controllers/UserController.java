@@ -1,7 +1,7 @@
 package com.example.logis.controllers;
 
-import com.example.logis.data.User;
-import com.example.logis.dtos.UserResponse;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.services.UserService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;

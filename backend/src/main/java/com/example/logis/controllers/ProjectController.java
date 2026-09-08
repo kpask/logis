@@ -1,7 +1,11 @@
 package com.example.logis.controllers;
 
-import com.example.logis.data.User;
-import com.example.logis.dtos.*;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.CreateProjectRequest;
+import com.example.logis.dtos.responses.ProjectResponse;
+import com.example.logis.dtos.requests.UpdateProjectRequest;
+import com.example.logis.dtos.requests.UpdateProjectStatusRequest;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.services.ProjectService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

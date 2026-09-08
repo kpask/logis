@@ -1,18 +1,19 @@
 package com.example.logis.services;
 
-import com.example.logis.data.Company;
-import com.example.logis.data.CompanyInvitation;
+import com.example.logis.data.entities.Company;
+import com.example.logis.data.entities.CompanyInvitation;
 import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.enums.InvitationStatus;
-import com.example.logis.data.User;
-import com.example.logis.dtos.AddUserToCompanyRequest;
-import com.example.logis.dtos.CreateInvitedUserRequest;
-import com.example.logis.dtos.CreateUserRequest;
-import com.example.logis.dtos.LoginRequest;
-import com.example.logis.dtos.LoginResponse;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.AddUserToCompanyRequest;
+import com.example.logis.dtos.requests.CreateInvitedUserRequest;
+import com.example.logis.dtos.requests.CreateUserRequest;
+import com.example.logis.dtos.requests.LoginRequest;
+import com.example.logis.dtos.responses.LoginResponse;
 import com.example.logis.exceptions.EmailAlreadyExistsException;
 import com.example.logis.exceptions.InvalidCredentialsException;
 import com.example.logis.exceptions.InvalidInvitationException;
+import com.example.logis.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

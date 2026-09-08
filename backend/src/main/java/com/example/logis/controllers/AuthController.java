@@ -1,9 +1,9 @@
 package com.example.logis.controllers;
 
-import com.example.logis.dtos.CreateInvitedUserRequest;
-import com.example.logis.dtos.CreateUserRequest;
-import com.example.logis.dtos.LoginRequest;
-import com.example.logis.dtos.LoginResponse;
+import com.example.logis.dtos.requests.CreateInvitedUserRequest;
+import com.example.logis.dtos.requests.CreateUserRequest;
+import com.example.logis.dtos.requests.LoginRequest;
+import com.example.logis.dtos.responses.LoginResponse;
 import com.example.logis.services.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;

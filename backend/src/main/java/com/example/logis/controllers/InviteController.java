@@ -1,8 +1,8 @@
 package com.example.logis.controllers;
 
-import com.example.logis.data.User;
-import com.example.logis.dtos.InvitationResponse;
-import com.example.logis.dtos.InviteUserRequest;
+import com.example.logis.data.entities.User;
+import com.example.logis.dtos.responses.InvitationResponse;
+import com.example.logis.dtos.requests.InviteUserRequest;
 import com.example.logis.services.InviteService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;

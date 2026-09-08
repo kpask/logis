@@ -1,15 +1,16 @@
 package com.example.logis.services;
 
-import com.example.logis.data.Company;
+import com.example.logis.data.entities.Company;
 import com.example.logis.data.enums.CompanyRole;
-import com.example.logis.data.Location;
-import com.example.logis.data.Project;
+import com.example.logis.data.entities.Location;
+import com.example.logis.data.entities.Project;
 import com.example.logis.data.enums.ProjectStatus;
-import com.example.logis.data.ProjectWorker;
-import com.example.logis.data.User;
-import com.example.logis.data.Workplace;
-import com.example.logis.dtos.CreateProjectRequest;
-import com.example.logis.dtos.ProjectResponse;
+import com.example.logis.data.entities.ProjectWorker;
+import com.example.logis.data.entities.User;
+import com.example.logis.data.entities.Workplace;
+import com.example.logis.dtos.requests.CreateProjectRequest;
+import com.example.logis.dtos.responses.ProjectResponse;
+import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.ProjectNotFoundException;
 import com.example.logis.exceptions.ResourceNotOwnedException;
@@ -348,7 +349,7 @@ class ProjectServiceTest {
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project));
         when(projectWorkerRepository.findByProject_Id(30L)).thenReturn(List.of(active, removed));
 
-        List<com.example.logis.dtos.UserResponse> workers = projectService.getProjectWorkersByProjectIdAndUser(30L, 2L);
+        List<UserResponse> workers = projectService.getProjectWorkersByProjectIdAndUser(30L, 2L);
 
         assertThat(workers).hasSize(1);
         assertThat(workers.get(0).id()).isEqualTo(3L);

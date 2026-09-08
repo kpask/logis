@@ -22,62 +22,12 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(CompanyNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleCompanyNotFound(CompanyNotFoundException ex){
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex){
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse(
-                        "COMPANY_NOT_FOUND",
-                        ex.getMessage()
-                ));
-    }
-
-    @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex){
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "USER_NOT_FOUND",
-                        ex.getMessage()
-                ));
-    }
-
-    @ExceptionHandler(ProjectNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleProjectNotFound(ProjectNotFoundException ex){
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "PROJECT_NOT_FOUND",
-                        ex.getMessage()
-                ));
-    }
-
-    @ExceptionHandler(TimeEntryNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleTimeEntryNotFound(TimeEntryNotFoundException ex){
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "TIME_ENTRY_NOT_FOUND",
-                        ex.getMessage()
-                ));
-    }
-
-    @ExceptionHandler(WorkplaceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleWorkplaceNotFound(WorkplaceNotFoundException ex){
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "WORKPLACE_NOT_FOUND",
-                        ex.getMessage()
-                ));
-    }
-
-    @ExceptionHandler(EmailNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleEmailNotFound(EmailNotFoundException ex){
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "EMAIL_NOT_FOUND",
+                        "NOT_FOUND",
                         ex.getMessage()
                 ));
     }
@@ -118,16 +68,6 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse(
                         "INVALID_ARGUMENT",
-                        ex.getMessage()
-                ));
-    }
-
-    @ExceptionHandler(InvitationNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleInvitationNotFound(InvitationNotFoundException ex){
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "INVITATION_NOT_FOUND",
                         ex.getMessage()
                 ));
     }

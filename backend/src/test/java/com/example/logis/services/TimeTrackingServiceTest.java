@@ -1,12 +1,12 @@
 package com.example.logis.services;
 
-import com.example.logis.data.*;
+import com.example.logis.data.entities.*;
 import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.enums.TimeEntryLogStatus;
-import com.example.logis.dtos.CreateTimeEntryRequest;
-import com.example.logis.dtos.StartTimeEntryRequest;
-import com.example.logis.dtos.TimeEntryResponse;
-import com.example.logis.dtos.UpdateTimeEntryRequest;
+import com.example.logis.dtos.requests.CreateTimeEntryRequest;
+import com.example.logis.dtos.requests.StartTimeEntryRequest;
+import com.example.logis.dtos.responses.TimeEntryResponse;
+import com.example.logis.dtos.requests.UpdateTimeEntryRequest;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.repository.TimeTrackingRepository;
 import org.junit.jupiter.api.Test;
