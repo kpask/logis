@@ -26,22 +26,23 @@ public class Project {
     public Project(String projectName, Workplace workplace, LocalDate startDate){
         this.projectName = projectName;
         this.workplace = workplace;
-        this.startDate = startDate;
-        projectStatus = startDate.isBefore(LocalDate.now()) ? ProjectStatus.ACTIVE : ProjectStatus.PENDING;
+        this.startDate = startDate == null ? LocalDate.now() : startDate;
+        projectStatus = ProjectStatus.ACTIVE;
     }
 
     public Project(String projectName, Workplace workplace, LocalDate startDate, LocalDate deadline){
         this.projectName = projectName;
         this.workplace = workplace;
-        this.startDate = startDate;
+        this.startDate = startDate == null ? LocalDate.now() : startDate;
         this.deadline = deadline;
-        projectStatus = startDate.isBefore(LocalDate.now()) ? ProjectStatus.ACTIVE : ProjectStatus.PENDING;
+        projectStatus = deadline != null && deadline.isAfter(LocalDate.now()) ? ProjectStatus.ACTIVE : ProjectStatus.PENDING;
     }
 
     public Project(String projectName, Workplace workplace){
         this.projectName = projectName;
         this.workplace = workplace;
         startDate = LocalDate.now();
+        projectStatus = ProjectStatus.ACTIVE;
     }
 
     public Long getId() {

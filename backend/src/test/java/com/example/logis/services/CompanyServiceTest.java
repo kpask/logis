@@ -3,7 +3,6 @@ package com.example.logis.services;
 import com.example.logis.data.entities.Company;
 import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.entities.ProjectWorker;
-import com.example.logis.data.entities.TimeEntry;
 import com.example.logis.data.entities.User;
 import com.example.logis.dtos.requests.AddUserToCompanyRequest;
 import com.example.logis.dtos.responses.CompanyResponse;
@@ -13,7 +12,6 @@ import com.example.logis.exceptions.CompanyNotFoundException;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.repository.CompanyRepository;
 import com.example.logis.repository.ProjectWorkerRepository;
-import com.example.logis.repository.TimeTrackingRepository;
 import com.example.logis.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,14 +20,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -47,9 +43,6 @@ class CompanyServiceTest {
 
     @Mock
     private ProjectWorkerRepository projectWorkerRepository;
-
-    @Mock
-    private TimeTrackingRepository timeTrackingRepository;
 
     @InjectMocks
     private CompanyService companyService;
@@ -147,9 +140,9 @@ class CompanyServiceTest {
     // ── makeCompanyManager ──────────────────────────────────────────────
 
     @Test
-    void makeCompanyManager_promotesUser_whenPromoterIsManagerOfSameCompany() {
+    void makeCompanyManager_promotesUser_whenPromoterIsOwnerOfSameCompany() {
         Company company = company(10L);
-        User promoter = user(1L, CompanyRole.MANAGER, company);
+        User promoter = user(1L, CompanyRole.OWNER, company);
         User target = user(2L, CompanyRole.USER, company);
         when(userService.findUser(1L)).thenReturn(promoter);
         when(userService.findUser(2L)).thenReturn(target);
@@ -160,7 +153,7 @@ class CompanyServiceTest {
     }
 
     @Test
-    void makeCompanyManager_throwsForbidden_whenPromoterIsNotManager() {
+    void makeCompanyManager_throwsForbidden_whenPromoterIsNotOwner() {
         Company company = company(10L);
         User promoter = user(1L, CompanyRole.USER, company);
         User target = user(2L, CompanyRole.USER, company);
@@ -169,14 +162,14 @@ class CompanyServiceTest {
 
         assertThatThrownBy(() -> companyService.makeCompanyManager(2L, 1L))
                 .isInstanceOf(ForbiddenActionException.class)
-                .hasMessageContaining("Only managers");
+                .hasMessageContaining("Only owners");
 
         assertThat(target.getRole()).isEqualTo(CompanyRole.USER);
     }
 
     @Test
     void makeCompanyManager_throwsForbidden_whenUsersBelongToDifferentCompanies() {
-        User promoter = user(1L, CompanyRole.MANAGER, company(10L));
+        User promoter = user(1L, CompanyRole.OWNER, company(10L));
         User target = user(2L, CompanyRole.USER, company(20L));
         when(userService.findUser(1L)).thenReturn(promoter);
         when(userService.findUser(2L)).thenReturn(target);
@@ -204,7 +197,7 @@ class CompanyServiceTest {
         assertThat(response.name()).isEqualTo("Acme Ltd");
         assertThat(manager.getCompany()).isNotNull();
         assertThat(manager.getCompany().getId()).isEqualTo(10L);
-        assertThat(manager.getRole()).isEqualTo(CompanyRole.MANAGER);
+        assertThat(manager.getRole()).isEqualTo(CompanyRole.OWNER);
         verify(userRepository).save(manager);
     }
 
@@ -243,48 +236,23 @@ class CompanyServiceTest {
                 .isInstanceOf(ForbiddenActionException.class);
     }
 
-    @Test
-    void getFormerMembersByUser_returnsMappedFormerMembers_whenRequesterIsManager() {
-        User requester = user(1L, CompanyRole.MANAGER, company(10L));
-        User former = user(2L, CompanyRole.USER, null);
-        when(userService.findUser(1L)).thenReturn(requester);
-        when(projectWorkerRepository.findFormerMembersByCompanyId(10L)).thenReturn(List.of(former));
-        UserResponse resp = new UserResponse(2L, "John", "Doe", "johndoe", "john@acme.com", CompanyRole.USER, null);
-        when(userService.toResponse(former)).thenReturn(resp);
-
-        List<UserResponse> formerMembers = companyService.getFormerMembersByUser(1L);
-
-        assertThat(formerMembers).containsExactly(resp);
-    }
-
-    @Test
-    void getFormerMembersByUser_throwsForbidden_whenRequesterIsNotManager() {
-        when(userService.findUser(1L)).thenReturn(user(1L, CompanyRole.USER, company(10L)));
-
-        assertThatThrownBy(() -> companyService.getFormerMembersByUser(1L))
-                .isInstanceOf(ForbiddenActionException.class)
-                .hasMessageContaining("Only managers");
-    }
-
     // ── kick ────────────────────────────────────────────────────────────
 
     @Test
-    void kick_removesUserFromCompany_andStopsActiveTimer_whenKickerIsManager() {
+    void kick_removesUserFromCompany_andDeletesProjectAssignments_whenKickerIsOwner() {
         Company company = company(10L);
-        User kicker = user(1L, CompanyRole.MANAGER, company);
+        User kicker = user(1L, CompanyRole.OWNER, company);
         User kicked = user(2L, CompanyRole.USER, company);
-        TimeEntry activeEntry = new TimeEntry(new ProjectWorker());
+        ProjectWorker assignment = new ProjectWorker();
         when(userService.findUser(2L)).thenReturn(kicked);
         when(userService.findUser(1L)).thenReturn(kicker);
-        when(timeTrackingRepository.findActiveTimeEntry(2L)).thenReturn(Optional.of(activeEntry));
+        when(projectWorkerRepository.findByWorker_Id(2L)).thenReturn(List.of(assignment));
 
         companyService.kick(2L, 1L);
 
         assertThat(kicked.getCompany()).isNull();
         assertThat(kicked.getRole()).isEqualTo(CompanyRole.USER);
-        assertThat(activeEntry.getEndTime()).isNotNull();
-        verify(timeTrackingRepository).save(activeEntry);
-        verify(projectWorkerRepository).kickUserFromProjects(eq(2L), any(LocalDate.class));
+        verify(projectWorkerRepository).deleteAll(List.of(assignment));
     }
 
     @Test
@@ -297,14 +265,14 @@ class CompanyServiceTest {
 
         assertThatThrownBy(() -> companyService.kick(2L, 1L))
                 .isInstanceOf(ForbiddenActionException.class)
-                .hasMessageContaining("not a manager");
+                .hasMessageContaining("not authorized to kick others");
 
         assertThat(kicked.getCompany()).isSameAs(company);
     }
 
     @Test
     void kick_throwsIllegalArgument_whenKickerKicksHimself() {
-        User kicker = user(1L, CompanyRole.MANAGER, company(10L));
+        User kicker = user(1L, CompanyRole.OWNER, company(10L));
         when(userService.findUser(1L)).thenReturn(kicker);
 
         assertThatThrownBy(() -> companyService.kick(1L, 1L))
@@ -314,7 +282,7 @@ class CompanyServiceTest {
 
     @Test
     void kick_throwsIllegalArgument_whenVictimHasNoCompany() {
-        User kicker = user(1L, CompanyRole.MANAGER, company(10L));
+        User kicker = user(1L, CompanyRole.OWNER, company(10L));
         User kicked = user(2L, CompanyRole.USER, null);
         when(userService.findUser(2L)).thenReturn(kicked);
         when(userService.findUser(1L)).thenReturn(kicker);
@@ -326,13 +294,13 @@ class CompanyServiceTest {
 
     @Test
     void kick_throwsIllegalArgument_whenVictimBelongsToDifferentCompany() {
-        User kicker = user(1L, CompanyRole.MANAGER, company(10L));
+        User kicker = user(1L, CompanyRole.OWNER, company(10L));
         User kicked = user(2L, CompanyRole.USER, company(20L));
         when(userService.findUser(2L)).thenReturn(kicked);
         when(userService.findUser(1L)).thenReturn(kicker);
 
         assertThatThrownBy(() -> companyService.kick(2L, 1L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("same company");
+                .hasMessageContaining("not associated with a company");
     }
 }

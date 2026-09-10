@@ -2,15 +2,22 @@ import type { ReactNode } from "react";
 import { useAuth } from "./auth";
 import { useState } from "react";
 import { getInitials } from "./utils";
+import { useI18n } from "./i18n";
 import {
   IconBuilding,
   IconDashboard,
   IconLogout,
+  IconSettings,
   IconUser,
   IconUsers,
 } from "./components";
 
-export type PageKey = "dashboard" | "workplaces" | "invites" | "profile";
+export type PageKey =
+  | "dashboard"
+  | "workplaces"
+  | "invites"
+  | "profile"
+  | "settings";
 
 interface AppLayoutProps {
   page: PageKey;
@@ -28,23 +35,27 @@ export default function AppLayout({
   children,
 }: AppLayoutProps) {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const navItems: { key: PageKey; label: string; icon: ReactNode }[] = [
-    { key: "dashboard", label: "Dashboard", icon: <IconDashboard /> },
-    { key: "workplaces", label: "Workplaces", icon: <IconBuilding /> },
-    { key: "invites", label: "Invites", icon: <IconUsers /> },
-    { key: "profile", label: "Profile", icon: <IconUser /> },
+  const navItems: { key: PageKey; labelKey: string; icon: ReactNode }[] = [
+    { key: "dashboard", labelKey: "navDashboard", icon: <IconDashboard /> },
+    { key: "workplaces", labelKey: "navWorkplaces", icon: <IconBuilding /> },
+    { key: "invites", labelKey: "navInvites", icon: <IconUsers /> },
+    { key: "profile", labelKey: "navProfile", icon: <IconUser /> },
+    { key: "settings", labelKey: "navSettings", icon: <IconSettings /> },
   ];
 
-  const pageTitle =
+  const pageTitleKey =
     page === "dashboard"
-      ? "Dashboard"
+      ? "navDashboard"
       : page === "workplaces"
-      ? "Workplaces"
+      ? "navWorkplaces"
       : page === "invites"
-      ? "Invites"
-      : "Profile";
+      ? "navInvites"
+      : page === "profile"
+      ? "navProfile"
+      : "navSettings";
 
   return (
     <div className={`app-layout ${mobileOpen ? "sidebar-open" : ""}`}>
@@ -73,7 +84,7 @@ export default function AppLayout({
               }}
             >
               {item.icon}
-              {item.label}
+              {t(item.labelKey as any)}
             </button>
           ))}
         </nav>
@@ -101,7 +112,7 @@ export default function AppLayout({
             }}
           >
             <IconLogout />
-            Sign out
+            {t("signOut")}
           </div>
         </div>
       </aside>
@@ -132,14 +143,16 @@ export default function AppLayout({
               </svg>
             </button>
             <div>
-              <div className="topbar-title">{pageTitle}</div>
+              <div className="topbar-title">{t(pageTitleKey as any)}</div>
             </div>
           </div>
 
           {user && (
             <div className="topbar-user" onClick={onOpenProfile}>
               <div className="topbar-avatar">{getInitials(user.name)}</div>
-              <span className="topbar-user-name">Welcome, {user.name}</span>
+              <span className="topbar-user-name">
+                {t("welcomeUser", { name: user.name })}
+              </span>
             </div>
           )}
         </header>

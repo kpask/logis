@@ -5,6 +5,7 @@ import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.entities.User;
 import com.example.logis.dtos.requests.CreateCompanyRequest;
 import com.example.logis.dtos.requests.AddUserToCompanyRequest;
+import com.example.logis.dtos.requests.UpdateCompanyRequest;
 import com.example.logis.dtos.responses.CompanyResponse;
 import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.exceptions.CompanyNotFoundException;
@@ -12,30 +13,26 @@ import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.UserNotFoundException;
 import com.example.logis.repository.CompanyRepository;
 import com.example.logis.repository.ProjectWorkerRepository;
-import com.example.logis.repository.TimeTrackingRepository;
 import com.example.logis.repository.UserRepository;
+import com.example.logis.util.AuthorizationHelper;
 import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.Positive;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 
 @Service
 public class CompanyService {
     private final CompanyRepository companyRepository;
     private final ProjectWorkerRepository projectWorkerRepository;
-    private final TimeTrackingRepository timeTrackingRepository;
     private final UserRepository userRepository;
     private final UserService userService;
-    
-    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository, UserService userService, ProjectWorkerRepository projectWorkerRepository, TimeTrackingRepository timeTrackingRepository){
+
+    public CompanyService(CompanyRepository companyRepository, UserRepository userRepository, UserService userService, ProjectWorkerRepository projectWorkerRepository){
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.userService = userService;
         this.projectWorkerRepository = projectWorkerRepository;
-        this.timeTrackingRepository = timeTrackingRepository;
     }
 
     public CompanyResponse getCompanyById(Long companyId){
@@ -81,10 +78,10 @@ public class CompanyService {
     public void makeCompanyManager(Long id, Long promoterId){
         User promoter = userService.findUser(promoterId);
         User newManager = userService.findUser(id);
-        if(!promoter.getRole().equals(CompanyRole.MANAGER)){
-            throw new ForbiddenActionException("Only managers can promote users to manager role");
+        if(!promoter.getRole().equals(CompanyRole.OWNER)){
+            throw new ForbiddenActionException("Only owners can promote users to manager role");
         }
-        if(promoter.getCompany() == null || newManager.getCompany() == null || !promoter.getCompany().getId().equals(newManager.getCompany().getId())){
+        if(!AuthorizationHelper.areUsersPartOfSameCompany(promoter, newManager)){
             throw new ForbiddenActionException("Requester and new manager must belong to the same company");
         }
         newManager.setRole(CompanyRole.MANAGER);
@@ -95,7 +92,7 @@ public class CompanyService {
         User manager = userService.findUser(managerId);
         Company savedCompany = companyRepository.save(new Company(request.name()));
         manager.setCompany(savedCompany);
-        manager.setRole(CompanyRole.MANAGER);
+        manager.setRole(CompanyRole.OWNER);
         userRepository.save(manager);
         return toResponse(savedCompany);
     }
@@ -126,7 +123,7 @@ public class CompanyService {
     @Transactional
     public List<UserResponse> getMembersByUser(Long requesterId) {
         User requester = userService.findUser(requesterId);
-        if (requester.getCompany() == null || requester.getCompany().getId() == null) {
+        if (requester.getCompany() == null) {
             throw new ForbiddenActionException("You can only view members of your own company.");
         }
         return userRepository.findByCompanyId(requester.getCompany().getId()).stream()
@@ -135,44 +132,65 @@ public class CompanyService {
     }
 
     @Transactional
-    public List<UserResponse> getFormerMembersByUser(Long requesterId) {
-        User requester = userService.findUser(requesterId);
-        if (requester.getCompany() == null || requester.getCompany().getId() == null) {
-            throw new ForbiddenActionException("You can only view former members of your own company.");
-        }
-        if (!requester.getRole().equals(CompanyRole.MANAGER)) {
-            throw new ForbiddenActionException("Only managers can view former company members.");
-        }
-        return projectWorkerRepository
-                .findFormerMembersByCompanyId(requester.getCompany().getId())
-                .stream()
-                .map(userService::toResponse)
-                .toList();
-    }
-
-    @Transactional
     public void kick(@Positive long kickedId, Long kickerId) {
         User kicked = userService.findUser(kickedId);
         User kicker = userService.findUser(kickerId);
-        if(!kicker.getRole().equals(CompanyRole.MANAGER)){
-            throw new ForbiddenActionException("Kicker " + kickerId + " is not a manager");
+        if(!kicker.getRole().equals(CompanyRole.OWNER)){
+            throw new ForbiddenActionException("Kicker " + kickerId + " is not authorized to kick others.");
         }
         if(kicker.equals(kicked)){
             throw new IllegalArgumentException("Kicker cannot kick himself");
         }
-        if(kicked.getCompany() == null || kicker.getCompany() == null) {
+        if(!AuthorizationHelper.areUsersPartOfSameCompany(kicked, kicker)) {
             throw new IllegalArgumentException("One or both users are not associated with a company");
-        }
-        if(!kicked.getCompany().getId().equals(kicker.getCompany().getId())){
-            throw new IllegalArgumentException("User is not associated with the same company");
         }
 
         kicked.setCompany(null);
         kicked.setRole(CompanyRole.USER);
-        projectWorkerRepository.kickUserFromProjects(kickedId, LocalDate.now());
-        timeTrackingRepository.findActiveTimeEntry(kickedId).ifPresent(timeEntry -> {
-            timeEntry.setEndTime(Instant.now());
-            timeTrackingRepository.save(timeEntry);
-        });
+        projectWorkerRepository.deleteAll(projectWorkerRepository.findByWorker_Id(kicked.getId()));
+    }
+
+    @Transactional
+    public UserResponse demote(@Positive long demotedUserId, Long promoterId) {
+        User demoted = userService.findUser(demotedUserId);
+        User demoter = userService.findUser(promoterId);
+        if(!demoter.getRole().equals(CompanyRole.OWNER)){
+            throw new ForbiddenActionException("Only owners can demote.");
+        }
+        if(demoted.equals(demoter)){
+            throw new IllegalArgumentException("You cannot demote yourself");
+        }
+        if(!AuthorizationHelper.areUsersPartOfSameCompany(demoted, demoter)) {
+            throw new ForbiddenActionException("You must both be part of the same company");
+        }
+        demoted.setRole(CompanyRole.USER);
+        return userService.toResponse(demoted);
+    }
+
+    @Transactional
+    public void transferOwnership(@Positive long newOwnerId, @Positive long formerOwnerId) {
+        User oldOwner = userService.findUser(formerOwnerId);
+        User newOwner = userService.findUser(newOwnerId);
+
+        if(!oldOwner.getRole().equals(CompanyRole.OWNER)){
+            throw new ForbiddenActionException("You are not the owner of your company");
+        }
+        if(!AuthorizationHelper.areUsersPartOfSameCompany(oldOwner, newOwner)){
+            throw new IllegalArgumentException("You cannot transfer ownership to a non company member.");
+        }
+
+        oldOwner.setRole(CompanyRole.MANAGER);
+        newOwner.setRole(CompanyRole.OWNER);
+    }
+
+    @Transactional
+    public CompanyResponse updateCompany(Long userId, UpdateCompanyRequest request) {
+        User user = userService.findUser(userId);
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(user, user.getCompany())){
+            throw new ForbiddenActionException("Non owners can't update company settings");
+        }
+        Company company = user.getCompany();
+        company.setName(request.name());
+        return toResponse(companyRepository.save(company));
     }
 }

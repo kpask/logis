@@ -8,10 +8,12 @@ import {
 } from "../api";
 import ClockInModal from "../ClockInModal";
 import type {
+  CompanySettingsResponse,
   ProjectResponse,
   ProjectStatus,
   TimeEntryLogStatus,
   TimeEntryResponse,
+  TimeWorkedResponse,
   UserResponse,
   WorkplaceResponse,
 } from "../types";
@@ -34,7 +36,7 @@ import {
 } from "../components";
 import {
   distanceMeters,
-  effectiveDurationSeconds,
+  durationToSeconds,
   elapsedSecondsFrom,
   formatDate,
   formatDateTime,
@@ -46,10 +48,14 @@ import {
   fromLocalDateTimeValue,
   getBrowserPosition,
   getInitials,
+  isManagerOrHigher,
   parseDate,
   toDateKey,
   toLocalDateTimeValue,
+  workedSecondsForDate,
+  workedSecondsInMonth,
 } from "../utils";
+import { useI18n } from "../i18n";
 
 interface ProjectPageProps {
   projectId: number;
@@ -58,23 +64,36 @@ interface ProjectPageProps {
 
 /** Small colored badge describing how a time entry was logged. */
 function TimeEntryStatusBadge({ status }: { status: TimeEntryLogStatus }) {
+  const { t } = useI18n();
   const meta: Record<
     TimeEntryLogStatus,
-    { label: string; color: string; background: string }
+    { color: string; background: string; key: string }
   > = {
-    LOGGED: { label: "Logged", color: "#2f7d32", background: "#e6f4ea" },
+    LOGGED: {
+      color: "#2f7d32",
+      background: "#e6f4ea",
+      key: "entryStatusLogged",
+    },
     LOGGED_OUTSIDE: {
-      label: "Outside",
       color: "#b45309",
       background: "#fdf1e0",
+      key: "entryStatusOutside",
     },
-    MANUAL_ENTRY: { label: "Manual", color: "#1d4ed8", background: "#e7edfd" },
-    EDITED: { label: "Edited", color: "#6d28d9", background: "#f1eafe" },
+    MANUAL_ENTRY: {
+      color: "#1d4ed8",
+      background: "#e7edfd",
+      key: "entryStatusManual",
+    },
+    EDITED: {
+      color: "#6d28d9",
+      background: "#f1eafe",
+      key: "entryStatusEdited",
+    },
   };
-  const { label, color, background } = meta[status];
+  const { color, background, key } = meta[status];
   return (
     <span className="badge" style={{ color, background, whiteSpace: "nowrap" }}>
-      {label}
+      {t(key as any)}
     </span>
   );
 }
@@ -90,9 +109,13 @@ const PROJECT_STATUSES: ProjectStatus[] = [
 
 export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   const { user } = useAuth();
+  const { t, language } = useI18n();
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [workplace, setWorkplace] = useState<WorkplaceResponse | null>(null);
   const [timeEntries, setTimeEntries] = useState<TimeEntryResponse[]>([]);
+  // Per-user, per-day worked time computed by the backend (lunch already
+  // deducted) — the frontend only filters and displays these rows.
+  const [timeWorked, setTimeWorked] = useState<TimeWorkedResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -128,9 +151,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
   // Project workers state
   const [workers, setWorkers] = useState<UserResponse[]>([]);
-  // Former company members (kicked) — merged into name resolution so their
-  // historical entries show real names instead of "—". Managers only.
-  const [formerMembers, setFormerMembers] = useState<UserResponse[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignWorkerId, setAssignWorkerId] = useState<number | "">("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
@@ -157,7 +177,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   const [addEntryWorkerId, setAddEntryWorkerId] = useState<number | "">("");
   const [addEntryStart, setAddEntryStart] = useState("");
   const [addEntryEnd, setAddEntryEnd] = useState("");
-  const [addEntryLunchLength, setAddEntryLunchLength] = useState(30);
   const [entrySubmitting, setEntrySubmitting] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
 
@@ -167,9 +186,12 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   );
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
-  const [editLunchLength, setEditLunchLength] = useState(30);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  // Company settings (default work times for the manual add-entry form)
+  const [companySettings, setCompanySettings] =
+    useState<CompanySettingsResponse | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -177,15 +199,18 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
     try {
       // Entries scoped to this project by the backend (managers get
-      // everyone's entries, regular members get only their own).
-      const [proj, entries, workerList] = await Promise.all([
+      // everyone's entries, regular members get only their own). Worked-time
+      // totals come pre-computed from the backend as per-user, per-day rows.
+      const [proj, entries, workerList, worked] = await Promise.all([
         projectsApi.get(projectId),
         timeTrackingApi.getByProject(projectId),
         projectsApi.getWorkers(projectId),
+        timeTrackingApi.getTimeWorkedByProject(projectId),
       ]);
       setProject(proj);
       setTimeEntries(entries);
       setWorkers(workerList);
+      setTimeWorked(worked);
 
       // Check if there's an active (running) entry of the current user
       // among this project's entries.
@@ -205,14 +230,15 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
           try {
             const memberList = await companiesApi.getMembers(wp.companyId);
             const me = memberList.find((m) => m.id === user.id);
-            setIsManager(me?.companyRole === "MANAGER");
+            setIsManager(isManagerOrHigher(me?.companyRole));
             setMembers(memberList);
 
-            if (me?.companyRole === "MANAGER") {
+            if (isManagerOrHigher(me?.companyRole)) {
+              // Company settings (default work times for the add-entry form)
               try {
-                setFormerMembers(await companiesApi.getFormerMembers());
+                setCompanySettings(await companiesApi.getSettings());
               } catch {
-                setFormerMembers([]);
+                setCompanySettings(null);
               }
             }
           } catch {
@@ -265,9 +291,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
       setActiveEntry(entry);
       setElapsedSeconds(0);
       if (entry.status === "LOGGED_OUTSIDE") {
-        setTimerError(
-          "Timer started outside the work area — this entry is flagged as logged outside."
-        );
+        setTimerError(t("projectTimerOutsideWarning"));
       }
       void loadData();
     } catch (err) {
@@ -374,7 +398,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   async function handleDeleteProject() {
     if (!project) return;
     const confirmed = window.confirm(
-      `Delete "${project.projectName}"? This will permanently remove the project and all of its time entries.`
+      t("projectDeleteConfirm").replace("{name}", project.projectName)
     );
     if (!confirmed) return;
 
@@ -409,7 +433,10 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   async function handleRemoveWorker(worker: UserResponse) {
     if (!project) return;
     const confirmed = window.confirm(
-      `Remove ${worker.name} ${worker.lastname} from ${project.projectName}?`
+      t("projectRemoveWorkerConfirm")
+        .replace("{name}", worker.name)
+        .replace("{lastname}", worker.lastname)
+        .replace("{project}", project.projectName)
     );
     if (!confirmed) return;
 
@@ -423,9 +450,11 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
   function openAddEntryModal() {
     setAddEntryWorkerId("");
-    setAddEntryStart(`${selectedDate}T07:30`);
-    setAddEntryEnd(`${selectedDate}T16:30`);
-    setAddEntryLunchLength(30);
+    const settings = companySettings;
+    setAddEntryStart(
+      `${selectedDate}T${settings?.defaultStartTime ?? "07:30"}`
+    );
+    setAddEntryEnd(`${selectedDate}T${settings?.defaultEndTime ?? "16:30"}`);
     setEntryError(null);
     setShowAddEntryModal(true);
   }
@@ -435,15 +464,11 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     const startIso = fromLocalDateTimeValue(addEntryStart);
     const endIso = fromLocalDateTimeValue(addEntryEnd);
     if (!startIso || !endIso) {
-      setEntryError("Please provide both start and end times.");
+      setEntryError(t("addEntryErrorTimesRequired"));
       return;
     }
     if (new Date(endIso) <= new Date(startIso)) {
-      setEntryError("End time must be after start time.");
-      return;
-    }
-    if (addEntryLunchLength < 0) {
-      setEntryError("Lunch length cannot be negative.");
+      setEntryError(t("addEntryErrorEndBeforeStart"));
       return;
     }
 
@@ -454,7 +479,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         workerId: addEntryWorkerId,
         startTime: startIso,
         endTime: endIso,
-        lunchLength: addEntryLunchLength,
       });
       setShowAddEntryModal(false);
       await loadData();
@@ -469,7 +493,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     setEditingEntry(entry);
     setEditStart(toLocalDateTimeValue(parseDate(entry.startTime)));
     setEditEnd(toLocalDateTimeValue(parseDate(entry.endTime)));
-    setEditLunchLength(entry.lunchLength ?? 30);
     setEditError(null);
   }
 
@@ -478,15 +501,11 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     const startIso = fromLocalDateTimeValue(editStart);
     const endIso = fromLocalDateTimeValue(editEnd);
     if (!startIso || !endIso) {
-      setEditError("Please provide both start and end times.");
+      setEditError(t("addEntryErrorTimesRequired"));
       return;
     }
     if (new Date(endIso) <= new Date(startIso)) {
-      setEditError("End time must be after start time.");
-      return;
-    }
-    if (editLunchLength < 0) {
-      setEditError("Lunch length cannot be negative.");
+      setEditError(t("addEntryErrorEndBeforeStart"));
       return;
     }
 
@@ -496,7 +515,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
       await timeTrackingApi.update(editingEntry.id, {
         startTime: startIso,
         endTime: endIso,
-        lunchLength: editLunchLength,
       });
       setEditingEntry(null);
       await loadData();
@@ -509,7 +527,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
   async function handleDeleteEntry() {
     if (!editingEntry) return;
-    const confirmed = window.confirm("Delete this time entry?");
+    const confirmed = window.confirm(t("editEntryDeleteConfirm"));
     if (!confirmed) return;
 
     setEditSubmitting(true);
@@ -544,16 +562,16 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   }
 
   if (loading) {
-    return <LoadingState label="Loading project…" />;
+    return <LoadingState label={t("loadingProject")} />;
   }
 
   if (error || !project) {
     return (
       <div className="card">
-        <Alert>{error || "Project not found."}</Alert>
+        <Alert>{error || t("projectNoAccess")}</Alert>
         <div style={{ marginTop: 16 }}>
           <button className="btn btn-secondary" onClick={onBack}>
-            Back
+            {t("projectNoAccessBack")}
           </button>
         </div>
       </div>
@@ -570,39 +588,39 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   // Only completed (stopped) entries count toward totals.
   const completedEntries = visibleEntries.filter((e) => e.endTime);
 
+  // Backend-computed worked rows, narrowed by the manager member filter just
+  // like the entries above. Each row is one user's total for one day with
+  // company rules (lunch) already applied — no frontend math.
+  const visibleWorkedRows =
+    isManager && selectedMember !== "all"
+      ? timeWorked.filter((row) => row.userId === selectedMember)
+      : timeWorked;
+
   // Days that have at least one logged entry (red on the calendar).
-  const workedDays = new Set(
-    completedEntries.map((e) => toDateKey(new Date(e.startTime)))
-  );
+  const workedDays = new Set(visibleWorkedRows.map((row) => row.date));
 
   // Total worked within the currently displayed calendar month.
-  const monthTotalSeconds = completedEntries
-    .filter((e) => {
-      const d = new Date(e.startTime);
-      return d.getFullYear() === viewYear && d.getMonth() === viewMonth;
-    })
-    .reduce(
-      (sum, entry) =>
-        sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
-      0
-    );
+  const monthTotalSeconds = workedSecondsInMonth(
+    visibleWorkedRows,
+    viewYear,
+    viewMonth
+  );
 
   // Entries for the currently selected date only.
   const selectedEntries = completedEntries.filter(
     (e) => toDateKey(new Date(e.startTime)) === selectedDate
   );
-  const selectedTotalSeconds = selectedEntries.reduce(
-    (sum, entry) =>
-      sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
-    0
+  // Total worked for the selected day.
+  const selectedTotalSeconds = workedSecondsForDate(
+    visibleWorkedRows,
+    selectedDate
   );
 
   const showWorkerColumn = isManager && selectedMember === "all";
   // Resolve worker names from the full company member list (plus the project's
-  // worker list as a fallback) so removed workers with historical entries still
-  // render their names in the time entry table.
+  // worker list as a fallback) so historical entries still render names.
   const workerNameById = new Map(
-    [...members, ...workers, ...formerMembers].map(
+    [...members, ...workers].map(
       (w) => [w.id, `${w.name} ${w.lastname}`] as const
     )
   );
@@ -613,8 +631,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   );
 
   // Members the calendar filter can narrow by: actively assigned workers plus
-  // anyone with historical time entries in this project (incl. removed workers).
-  // Resolved from the company member list so inactive workers' names show up.
+  // anyone with historical time entries in this project.
   const filterableMemberIds = new Set<number>([
     ...workers.map((w) => w.id),
     ...timeEntries.map((e) => e.workerId),
@@ -633,7 +650,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 onBack();
               }}
             >
-              {workplace?.name || "Workplace"}
+              {workplace?.name || t("projectWorkplaceFallback")}
             </a>{" "}
             / {project.projectName}
           </div>
@@ -656,7 +673,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                   style={{ marginLeft: "auto" }}
                   onClick={openEditProjectModal}
                 >
-                  Edit
+                  {t("projectEdit")}
                 </button>
                 <button
                   className="btn btn-danger btn-sm"
@@ -664,16 +681,19 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                   disabled={projectDeleting}
                 >
                   <IconTrash />
-                  {projectDeleting ? "Deleting…" : "Delete"}
+                  {projectDeleting ? t("projectDeleting") : t("delete")}
                 </button>
               </>
             )}
           </div>
           <p className="page-header-subtitle">
-            {workplace?.name || "Workplace"} · Started{" "}
-            {formatDate(project.startDate)}
+            {workplace?.name || t("projectWorkplaceFallback")} ·{" "}
+            {t("projectStartedLabel")} {formatDate(project.startDate, language)}
             {project.deadline
-              ? ` · Deadline ${formatDate(project.deadline)}`
+              ? ` · ${t("projectDeadlineLabel")} ${formatDate(
+                  project.deadline,
+                  language
+                )}`
               : ""}
           </p>
         </div>
@@ -697,7 +717,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             flexWrap: "wrap",
           }}
         >
-          <h3 style={{ margin: 0 }}>Workers</h3>
+          <h3 style={{ margin: 0 }}>{t("projectWorkersTitle")}</h3>
           {isManager && (
             <button
               className="btn btn-secondary btn-sm"
@@ -708,7 +728,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               }}
             >
               <IconPlus />
-              Assign worker
+              {t("projectAssignWorker")}
             </button>
           )}
         </div>
@@ -716,8 +736,8 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         {workers.length === 0 ? (
           <EmptyState
             icon={<IconUsers />}
-            title="No workers assigned yet."
-            description="Assign company members to this project so they can track time on it."
+            title={t("projectNoWorkersTitle")}
+            description={t("projectNoWorkersDesc")}
           />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -745,7 +765,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                     style={{ marginLeft: "auto" }}
                     onClick={() => handleRemoveWorker(worker)}
                   >
-                    Remove
+                    {t("projectRemoveWorker")}
                   </button>
                 )}
               </div>
@@ -758,7 +778,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         {/* Timer above the calendar */}
         <div className="card timer-card" style={{ marginBottom: 0 }}>
           <div className="muted small" style={{ marginBottom: 8 }}>
-            {activeEntry ? "Currently working" : "No timer running"}
+            {activeEntry ? t("projectTimerRunning") : t("projectNoTimer")}
           </div>
           <div className="timer-display" style={{ marginBottom: 20 }}>
             {formatTimer(elapsedSeconds)}
@@ -777,7 +797,9 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               disabled={timerActionLoading}
             >
               <IconStop />
-              {timerActionLoading ? "Stopping…" : "Stop timer"}
+              {timerActionLoading
+                ? t("projectStopping")
+                : t("projectStopTimer")}
             </button>
           ) : (
             <button
@@ -786,7 +808,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               disabled={timerActionLoading || locating}
             >
               <IconPlay />
-              {locating ? "Checking location…" : "Start timer"}
+              {locating ? t("projectCheckingLocation") : t("projectStartTimer")}
             </button>
           )}
         </div>
@@ -795,7 +817,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         <div className="card calendar-card">
           {isManager && (
             <div style={{ marginBottom: 12 }}>
-              {/* Active workers plus removed workers who still have entries. */}
               <MemberSelect
                 members={filterMembers}
                 value={selectedMember}
@@ -828,11 +849,13 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
           flexWrap: "wrap",
         }}
       >
-        <h2 style={{ margin: 0 }}>{formatMonthDay(selectedDate)}</h2>
+        <h2 style={{ margin: 0 }}>{formatMonthDay(selectedDate, language)}</h2>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {selectedEntries.length > 0 && (
             <span className="badge badge-primary">
-              {formatDurationHuman(selectedTotalSeconds)} logged
+              {t("projectLoggedTimeBadge", {
+                time: formatDurationHuman(selectedTotalSeconds, language),
+              })}
             </span>
           )}
           {isManager && (
@@ -841,7 +864,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               onClick={openAddEntryModal}
             >
               <IconPlus />
-              Log time
+              {t("projectLogTime")}
             </button>
           )}
         </div>
@@ -851,8 +874,8 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         <div className="card" style={{ marginBottom: 24 }}>
           <EmptyState
             icon={<IconClock />}
-            title="No time logged on this day."
-            description="Click any worked day in the calendar to see its entries, or start the timer above to log time for today."
+            title={t("emptyNoTimeLogged")}
+            description={t("emptyNoTimeLoggedProjectDesc")}
           />
         </div>
       ) : (
@@ -863,12 +886,11 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
           <table className="table">
             <thead>
               <tr>
-                <th>Start</th>
-                <th>End</th>
-                <th>Lunch</th>
-                <th>Status</th>
-                <th>Worked</th>
-                {showWorkerColumn && <th>Worker</th>}
+                <th>{t("colStart")}</th>
+                <th>{t("colEnd")}</th>
+                <th>{t("colStatus")}</th>
+                <th>{t("colWorked")}</th>
+                {showWorkerColumn && <th>{t("colWorker")}</th>}
               </tr>
             </thead>
             <tbody>
@@ -880,18 +902,15 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                     isManager ? () => openEditEntryModal(entry) : undefined
                   }
                 >
-                  <td>{formatTime(entry.startTime)}</td>
-                  <td>{formatTime(entry.endTime)}</td>
-                  <td className="muted">{entry.lunchLength}m</td>
+                  <td>{formatTime(entry.startTime, language)}</td>
+                  <td>{formatTime(entry.endTime, language)}</td>
                   <td>
                     <TimeEntryStatusBadge status={entry.status} />
                   </td>
                   <td style={{ fontWeight: 500 }}>
                     {formatDuration(
-                      effectiveDurationSeconds(
-                        entry.duration,
-                        entry.lunchLength
-                      )
+                      durationToSeconds(entry.duration),
+                      language
                     )}
                   </td>
                   {showWorkerColumn && (
@@ -905,13 +924,13 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             <tfoot>
               <tr>
                 <td
-                  colSpan={showWorkerColumn ? 5 : 4}
+                  colSpan={showWorkerColumn ? 4 : 3}
                   style={{ fontWeight: 600 }}
                 >
-                  Total
+                  {t("colTotal")}
                 </td>
                 <td style={{ fontWeight: 700 }}>
-                  {formatDurationHuman(selectedTotalSeconds)}
+                  {formatDurationHuman(selectedTotalSeconds, language)}
                 </td>
               </tr>
             </tfoot>
@@ -934,10 +953,11 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
       {showAddEntryModal && (
         <Modal
-          title="Add time entry"
-          description={`Log time for ${formatMonthDay(selectedDate)} on ${
-            project.projectName
-          }.`}
+          title={t("addEntryTitle")}
+          description={t("addEntryDesc", {
+            date: formatMonthDay(selectedDate, language),
+            project: project.projectName,
+          })}
           onClose={() => {
             setShowAddEntryModal(false);
             setEntryError(null);
@@ -952,14 +972,16 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 }}
                 disabled={entrySubmitting}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleAddEntry}
                 disabled={entrySubmitting || !addEntryWorkerId}
               >
-                {entrySubmitting ? "Adding…" : "Add entry"}
+                {entrySubmitting
+                  ? t("addEntrySubmitting")
+                  : t("addEntrySubmit")}
               </button>
             </>
           }
@@ -972,7 +994,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div className="form-group">
               <label className="form-label" htmlFor="add-entry-worker">
-                Worker
+                {t("addEntryWorkerLabel")}
               </label>
               <select
                 id="add-entry-worker"
@@ -986,7 +1008,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 disabled={entrySubmitting}
               >
                 <option value="" disabled>
-                  Select a worker…
+                  {t("addEntryWorkerPlaceholder")}
                 </option>
                 {workers.map((worker) => (
                   <option key={worker.id} value={worker.id}>
@@ -997,48 +1019,27 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-start">
-                Start
+                {t("addEntryStartLabel")}
               </label>
               <input
                 id="edit-project-start"
                 type="datetime-local"
                 className="form-input"
-                value={editStart}
-                onChange={(e) => setEditStart(e.target.value)}
-                disabled={editSubmitting || !editingEntry.endTime}
+                value={addEntryStart}
+                onChange={(e) => setAddEntryStart(e.target.value)}
+                disabled={entrySubmitting}
               />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-end">
-                End
+                {t("addEntryEndLabel")}
               </label>
               <input
                 id="edit-project-end"
                 type="datetime-local"
                 className="form-input"
-                value={editEnd}
-                onChange={(e) => setEditEnd(e.target.value)}
-                disabled={editSubmitting || !editingEntry.endTime}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="add-entry-lunch-length">
-                Lunch length (minutes)
-              </label>
-              <input
-                id="add-entry-lunch-length"
-                type="number"
-                min={0}
-                step={5}
-                className="form-input"
-                value={addEntryLunchLength}
-                onChange={(e) =>
-                  setAddEntryLunchLength(
-                    Number.isFinite(Number(e.target.value))
-                      ? Number(e.target.value)
-                      : 0
-                  )
-                }
+                value={addEntryEnd}
+                onChange={(e) => setAddEntryEnd(e.target.value)}
                 disabled={entrySubmitting}
               />
             </div>
@@ -1048,13 +1049,14 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
       {editingEntry && (
         <Modal
-          title="Edit time entry"
+          title={t("editEntryTitle")}
           description={
             editingEntry.endTime
-              ? `${formatDateTime(editingEntry.startTime)} → ${formatDateTime(
-                  editingEntry.endTime
-                )}`
-              : "This entry is still running and cannot be edited."
+              ? t("editEntryTimeRange", {
+                  start: formatDateTime(editingEntry.startTime, language),
+                  end: formatDateTime(editingEntry.endTime, language),
+                })
+              : t("editEntryRunningWarning")
           }
           onClose={() => setEditingEntry(null)}
           footer={
@@ -1064,21 +1066,23 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 onClick={handleDeleteEntry}
                 disabled={editSubmitting}
               >
-                {editSubmitting ? "Deleting…" : "Delete"}
+                {editSubmitting ? t("editEntryDeleting") : t("editEntryDelete")}
               </button>
               <button
                 className="btn btn-secondary"
                 onClick={() => setEditingEntry(null)}
                 disabled={editSubmitting}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleSaveEdit}
                 disabled={editSubmitting || !editingEntry.endTime}
               >
-                {editSubmitting ? "Saving…" : "Save"}
+                {editSubmitting
+                  ? t("editEntrySubmitting")
+                  : t("editEntrySubmit")}
               </button>
             </>
           }
@@ -1092,7 +1096,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             <div className="grid-2" style={{ gap: 12 }}>
               <div className="form-group">
                 <label className="form-label" htmlFor="edit-start">
-                  Start
+                  {t("addEntryStartLabel")}
                 </label>
                 <input
                   id="edit-start"
@@ -1105,7 +1109,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="edit-end">
-                  End
+                  {t("addEntryEndLabel")}
                 </label>
                 <input
                   id="edit-end"
@@ -1117,35 +1121,16 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 />
               </div>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="edit-lunch-length">
-                Lunch length (minutes)
-              </label>
-              <input
-                id="edit-lunch-length"
-                type="number"
-                min={0}
-                step={5}
-                className="form-input"
-                value={editLunchLength}
-                onChange={(e) =>
-                  setEditLunchLength(
-                    Number.isFinite(Number(e.target.value))
-                      ? Number(e.target.value)
-                      : 0
-                  )
-                }
-                disabled={editSubmitting || !editingEntry.endTime}
-              />
-            </div>
           </div>
         </Modal>
       )}
 
       {showAssignModal && (
         <Modal
-          title="Assign worker"
-          description={`Add a company member to ${project.projectName}.`}
+          title={t("assignWorkerTitle")}
+          description={t("assignWorkerDesc", {
+            project: project.projectName,
+          })}
           onClose={() => {
             setShowAssignModal(false);
             setAssignError(null);
@@ -1160,14 +1145,16 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 }}
                 disabled={assignSubmitting}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleAssignWorker}
                 disabled={assignSubmitting || !assignWorkerId}
               >
-                {assignSubmitting ? "Assigning…" : "Assign"}
+                {assignSubmitting
+                  ? t("assignWorkerSubmitting")
+                  : t("assignWorkerSubmit")}
               </button>
             </>
           }
@@ -1179,7 +1166,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
           )}
           <div className="form-group">
             <label className="form-label" htmlFor="assign-worker">
-              Company member
+              {t("assignWorkerLabel")}
             </label>
             <select
               id="assign-worker"
@@ -1193,7 +1180,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               disabled={assignSubmitting}
             >
               <option value="" disabled>
-                Select a member…
+                {t("assignWorkerPlaceholder")}
               </option>
               {assignableMembers.map((member) => (
                 <option key={member.id} value={member.id}>
@@ -1203,7 +1190,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             </select>
             {assignableMembers.length === 0 && (
               <div className="muted small" style={{ marginTop: 8 }}>
-                All company members are already assigned to this project.
+                {t("assignWorkerAllAssigned")}
               </div>
             )}
           </div>
@@ -1212,10 +1199,10 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
       {showEditProject && (
         <Modal
-          title="Edit project"
-          description={`Update details for ${
-            editProjectName || "this project"
-          }.`}
+          title={t("editProjectTitle")}
+          description={t("editProjectDesc", {
+            name: editProjectName || t("editProjectFallback"),
+          })}
           onClose={() => setShowEditProject(false)}
           footer={
             <>
@@ -1224,14 +1211,16 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
                 onClick={() => setShowEditProject(false)}
                 disabled={editProjectSubmitting}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleEditProject}
                 disabled={editProjectSubmitting}
               >
-                {editProjectSubmitting ? "Saving…" : "Save changes"}
+                {editProjectSubmitting
+                  ? t("editProjectSubmitting")
+                  : t("editProjectSubmit")}
               </button>
             </>
           }
@@ -1249,13 +1238,13 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
           >
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-name">
-                Project name
+                {t("editProjectNameLabel")}
               </label>
               <input
                 id="edit-project-name"
                 type="text"
                 className="form-input"
-                placeholder="e.g. Website redesign"
+                placeholder={t("editProjectNamePlaceholder")}
                 value={editProjectName}
                 onChange={(e) => setEditProjectName(e.target.value)}
                 disabled={editProjectSubmitting}
@@ -1263,7 +1252,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-start">
-                Start date
+                {t("editProjectStartDateLabel")}
               </label>
               <input
                 id="edit-project-start"
@@ -1276,7 +1265,7 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-deadline">
-                Deadline
+                {t("editProjectDeadlineLabel")}
               </label>
               <input
                 id="edit-project-deadline"
@@ -1288,7 +1277,9 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Status</label>
+              <label className="form-label">
+                {t("editProjectStatusLabel")}
+              </label>
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 10 }}
               >

@@ -31,7 +31,7 @@ public class Company {
     protected Company(){}
 
     public List<User> getManagers() {
-        return users.stream().filter(user -> user.getRole() == CompanyRole.MANAGER).toList();
+        return users.stream().filter(user -> user.getRole() != CompanyRole.USER).toList();
     }
 
     public Long getId() {

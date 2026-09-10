@@ -47,6 +47,9 @@ class TimeTrackingServiceTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private CompanySettingsService companySettingsService;
+
     @InjectMocks
     private TimeTrackingService timeTrackingService;
 
@@ -420,7 +423,7 @@ class TimeTrackingServiceTest {
     // ── createTimeEntryForProject ───────────────────────────────────────
 
     @Test
-    void createTimeEntryForProject_createsEntry_withDefaultLunch_whenManagerCreatesForWorker() {
+    void createTimeEntryForProject_createsEntry_whenManagerCreatesForWorker() {
         Company company = company(10L);
         User manager = manager(1L, company);
         User worker = member(2L, company);
@@ -431,12 +434,12 @@ class TimeTrackingServiceTest {
         when(timeTrackingRepository.save(any(TimeEntry.class))).thenReturn(saved);
 
         TimeEntryResponse response = timeTrackingService.createTimeEntryForProject(
-                30L, new CreateTimeEntryRequest(2L, START, END, null), 1L);
+                30L, new CreateTimeEntryRequest(2L, START, END), 1L);
 
         ArgumentCaptor<TimeEntry> captor = ArgumentCaptor.forClass(TimeEntry.class);
         verify(timeTrackingRepository).save(captor.capture());
-        assertThat(captor.getValue().getLunchLength()).isEqualTo(30L);
         assertThat(captor.getValue().getStartTime()).isEqualTo(START);
+        assertThat(captor.getValue().getEndTime()).isEqualTo(END);
         assertThat(response.id()).isEqualTo(50L);
     }
 
@@ -450,7 +453,7 @@ class TimeTrackingServiceTest {
         when(projectService.findProjectWorker(30L, 2L)).thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> timeTrackingService.createTimeEntryForProject(
-                30L, new CreateTimeEntryRequest(2L, START, END, null), 3L))
+                30L, new CreateTimeEntryRequest(2L, START, END), 3L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("not authorized to create");
 
@@ -467,24 +470,9 @@ class TimeTrackingServiceTest {
         when(projectService.findProjectWorker(30L, 2L)).thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> timeTrackingService.createTimeEntryForProject(
-                30L, new CreateTimeEntryRequest(2L, START, START, null), 1L))
+                30L, new CreateTimeEntryRequest(2L, START, START), 1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("End time must be after start time");
-    }
-
-    @Test
-    void createTimeEntryForProject_throwsIllegalArgument_whenLunchIsNegative() {
-        Company company = company(10L);
-        User manager = manager(1L, company);
-        User worker = member(2L, company);
-        ProjectWorker assignment = projectWorker(40L, worker, project(30L, workplace(20L, company)), null);
-        when(userService.findUser(1L)).thenReturn(manager);
-        when(projectService.findProjectWorker(30L, 2L)).thenReturn(Optional.of(assignment));
-
-        assertThatThrownBy(() -> timeTrackingService.createTimeEntryForProject(
-                30L, new CreateTimeEntryRequest(2L, START, END, -5L), 1L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("cannot be negative");
     }
 
     // ── updateTimeEntry ─────────────────────────────────────────────────
@@ -501,11 +489,10 @@ class TimeTrackingServiceTest {
         when(timeTrackingRepository.save(entry)).thenReturn(entry);
 
         timeTrackingService.updateTimeEntry(50L,
-                new UpdateTimeEntryRequest(START.plusSeconds(3600), END.plusSeconds(3600), 45L), 1L);
+                new UpdateTimeEntryRequest(START.plusSeconds(3600), END.plusSeconds(3600)), 1L);
 
         assertThat(entry.getStartTime()).isEqualTo(START.plusSeconds(3600));
         assertThat(entry.getEndTime()).isEqualTo(END.plusSeconds(3600));
-        assertThat(entry.getLunchLength()).isEqualTo(45L);
     }
 
     @Test
@@ -519,7 +506,7 @@ class TimeTrackingServiceTest {
         when(timeTrackingRepository.findById(50L)).thenReturn(Optional.of(entry));
 
         assertThatThrownBy(() -> timeTrackingService.updateTimeEntry(50L,
-                new UpdateTimeEntryRequest(START, END, null), 3L))
+                new UpdateTimeEntryRequest(START, END), 3L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("not authorized to update");
     }
@@ -535,7 +522,7 @@ class TimeTrackingServiceTest {
         when(timeTrackingRepository.findById(50L)).thenReturn(Optional.of(entry));
 
         assertThatThrownBy(() -> timeTrackingService.updateTimeEntry(50L,
-                new UpdateTimeEntryRequest(START, END, null), 1L))
+                new UpdateTimeEntryRequest(START, END), 1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Stop the running timer");
     }

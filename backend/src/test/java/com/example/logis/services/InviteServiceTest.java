@@ -61,40 +61,32 @@ class InviteServiceTest {
     }
 
     private static CompanyInvitation invitation(Company company, User inviter) {
-        // constructor defaults: PENDING status, expires in 7 days
+        // Constructor defaults: PENDING status, expires in 7 days.
         return new CompanyInvitation("invitee@acme.com", company, inviter, TOKEN);
     }
 
     // ── createInvitation ────────────────────────────────────────────────
 
     @Test
-    void createInvitation_throwsForbidden_whenInviterHasNoCompany() {
-        when(userService.findUser(1L)).thenReturn(user(1L, CompanyRole.MANAGER, null, "john@acme.com"));
+    void createInvitation_throwsForbidden_whenInviterIsNotOwner() {
+        when(userService.findUser(1L))
+                .thenReturn(user(1L, CompanyRole.MANAGER, company(10L), "john@acme.com"));
 
         assertThatThrownBy(() -> inviteService.createInvitation(1L, "invitee@acme.com"))
                 .isInstanceOf(ForbiddenActionException.class)
-                .hasMessageContaining("not part of a company");
-
-        verifyNoInteractions(inviteRepository);
-    }
-
-    @Test
-    void createInvitation_throwsForbidden_whenInviterIsNotManager() {
-        when(userService.findUser(1L)).thenReturn(user(1L, CompanyRole.USER, company(10L), "john@acme.com"));
-
-        assertThatThrownBy(() -> inviteService.createInvitation(1L, "invitee@acme.com"))
-                .isInstanceOf(ForbiddenActionException.class)
-                .hasMessageContaining("non-manager");
+                .hasMessageContaining("cannot invite users");
 
         verifyNoInteractions(inviteRepository);
     }
 
     @Test
     void createInvitation_throwsIllegalArgument_whenInviteeIsAlreadyMember() {
-        User inviter = user(1L, CompanyRole.MANAGER, company(10L), "john@acme.com");
+        User inviter = user(1L, CompanyRole.OWNER, company(10L), "john@acme.com");
         User existingMember = user(2L, CompanyRole.USER, inviter.getCompany(), "invitee@acme.com");
+
         when(userService.findUser(1L)).thenReturn(inviter);
-        when(userService.findUserByEmail("invitee@acme.com")).thenReturn(Optional.of(existingMember));
+        when(userService.findUserByEmail("invitee@acme.com"))
+                .thenReturn(Optional.of(existingMember));
 
         assertThatThrownBy(() -> inviteService.createInvitation(1L, "  Invitee@ACME.com  "))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -105,11 +97,17 @@ class InviteServiceTest {
 
     @Test
     void createInvitation_throwsIllegalArgument_whenPendingInviteAlreadyExists() {
-        User inviter = user(1L, CompanyRole.MANAGER, company(10L), "john@acme.com");
+        User inviter = user(1L, CompanyRole.OWNER, company(10L), "john@acme.com");
+
         when(userService.findUser(1L)).thenReturn(inviter);
-        when(userService.findUserByEmail("invitee@acme.com")).thenReturn(Optional.empty());
+        when(userService.findUserByEmail("invitee@acme.com"))
+                .thenReturn(Optional.empty());
+
         when(inviteRepository.existsByEmailIgnoreCaseAndCompanyIdAndInvitationStatus(
-                "invitee@acme.com", 10L, InvitationStatus.PENDING)).thenReturn(true);
+                "invitee@acme.com",
+                10L,
+                InvitationStatus.PENDING
+        )).thenReturn(true);
 
         assertThatThrownBy(() -> inviteService.createInvitation(1L, "invitee@acme.com"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -120,24 +118,41 @@ class InviteServiceTest {
 
     @Test
     void createInvitation_savesInvitation_withNormalizedEmail_andReturnsResponse() {
-        User inviter = user(1L, CompanyRole.MANAGER, company(10L), "john@acme.com");
+        User inviter = user(1L, CompanyRole.OWNER, company(10L), "john@acme.com");
+
         when(userService.findUser(1L)).thenReturn(inviter);
-        when(userService.findUserByEmail("invitee@acme.com")).thenReturn(Optional.empty());
+        when(userService.findUserByEmail("invitee@acme.com"))
+                .thenReturn(Optional.empty());
+
         when(inviteRepository.existsByEmailIgnoreCaseAndCompanyIdAndInvitationStatus(
-                "invitee@acme.com", 10L, InvitationStatus.PENDING)).thenReturn(false);
-        when(inviteRepository.save(any(CompanyInvitation.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(userService.existsByEmail("invitee@acme.com")).thenReturn(false);
+                "invitee@acme.com",
+                10L,
+                InvitationStatus.PENDING
+        )).thenReturn(false);
 
-        InvitationResponse response = inviteService.createInvitation(1L, "  Invitee@ACME.com  ");
+        when(inviteRepository.save(any(CompanyInvitation.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
-        ArgumentCaptor<CompanyInvitation> captor = ArgumentCaptor.forClass(CompanyInvitation.class);
+        when(userService.existsByEmail("invitee@acme.com"))
+                .thenReturn(false);
+
+        InvitationResponse response =
+                inviteService.createInvitation(1L, "  Invitee@ACME.com  ");
+
+        ArgumentCaptor<CompanyInvitation> captor =
+                ArgumentCaptor.forClass(CompanyInvitation.class);
+
         verify(inviteRepository).save(captor.capture());
+
         CompanyInvitation saved = captor.getValue();
+
         assertThat(saved.getEmail()).isEqualTo("invitee@acme.com");
         assertThat(saved.getToken()).isNotBlank();
         assertThat(saved.getCompany()).isSameAs(inviter.getCompany());
-        assertThat(ReflectionTestUtils.getField(saved, "invitedBy")).isSameAs(inviter);
-        assertThat(saved.getExpiresAt()).isAfter(LocalDateTime.now());
+        assertThat(ReflectionTestUtils.getField(saved, "invitedBy"))
+                .isSameAs(inviter);
+        assertThat(saved.getExpiresAt())
+                .isAfter(LocalDateTime.now());
 
         assertThat(response.companyName()).isEqualTo("Acme Ltd");
         assertThat(response.email()).isEqualTo("invitee@acme.com");
@@ -152,8 +167,12 @@ class InviteServiceTest {
     void acceptInvite_throwsIllegalState_whenInvitationIsNotPending() {
         CompanyInvitation invitation = invitation(company(10L), null);
         invitation.setInvitationStatus(InvitationStatus.ACCEPTED);
-        when(userService.findUser(5L)).thenReturn(user(5L, CompanyRole.USER, null, "john@acme.com"));
-        when(inviteRepository.findByToken(TOKEN)).thenReturn(Optional.of(invitation));
+
+        when(userService.findUser(5L))
+                .thenReturn(user(5L, CompanyRole.USER, null, "john@acme.com"));
+
+        when(inviteRepository.findByToken(TOKEN))
+                .thenReturn(Optional.of(invitation));
 
         assertThatThrownBy(() -> inviteService.acceptInvite(TOKEN, 5L))
                 .isInstanceOf(IllegalStateException.class)
@@ -166,35 +185,49 @@ class InviteServiceTest {
     void acceptInvite_marksInvitationExpired_andThrows_whenInvitationIsExpired() {
         CompanyInvitation invitation = invitation(company(10L), null);
         invitation.setExpiresAt(LocalDateTime.now().minusDays(1));
-        when(userService.findUser(5L)).thenReturn(user(5L, CompanyRole.USER, null, "john@acme.com"));
-        when(inviteRepository.findByToken(TOKEN)).thenReturn(Optional.of(invitation));
+
+        when(userService.findUser(5L))
+                .thenReturn(user(5L, CompanyRole.USER, null, "john@acme.com"));
+
+        when(inviteRepository.findByToken(TOKEN))
+                .thenReturn(Optional.of(invitation));
 
         assertThatThrownBy(() -> inviteService.acceptInvite(TOKEN, 5L))
                 .isInstanceOf(IllegalStateException.class);
 
-        // lazy auto-expiry in getInvitationStatus() marks it EXPIRED
-        assertThat(invitation.getInvitationStatus()).isEqualTo(InvitationStatus.EXPIRED);
+        assertThat(invitation.getInvitationStatus())
+                .isEqualTo(InvitationStatus.EXPIRED);
+
         verify(companyService, never()).addUserToCompany(any(), any());
     }
 
     @Test
     void acceptInvite_throwsForbidden_whenAccepterAlreadyBelongsToACompany() {
         CompanyInvitation invitation = invitation(company(10L), null);
-        when(userService.findUser(5L)).thenReturn(user(5L, CompanyRole.USER, company(20L), "john@acme.com"));
-        when(inviteRepository.findByToken(TOKEN)).thenReturn(Optional.of(invitation));
+
+        when(userService.findUser(5L))
+                .thenReturn(user(5L, CompanyRole.USER, company(20L), "john@acme.com"));
+
+        when(inviteRepository.findByToken(TOKEN))
+                .thenReturn(Optional.of(invitation));
 
         assertThatThrownBy(() -> inviteService.acceptInvite(TOKEN, 5L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("already part of a company");
 
-        assertThat(invitation.getInvitationStatus()).isEqualTo(InvitationStatus.PENDING);
+        assertThat(invitation.getInvitationStatus())
+                .isEqualTo(InvitationStatus.PENDING);
     }
 
     @Test
     void acceptInvite_throwsForbidden_whenInvitationWasSentToAnotherEmail() {
-        CompanyInvitation invitation = invitation(company(10L), null); // invitee@acme.com
-        when(userService.findUser(5L)).thenReturn(user(5L, CompanyRole.USER, null, "john@acme.com"));
-        when(inviteRepository.findByToken(TOKEN)).thenReturn(Optional.of(invitation));
+        CompanyInvitation invitation = invitation(company(10L), null);
+
+        when(userService.findUser(5L))
+                .thenReturn(user(5L, CompanyRole.USER, null, "john@acme.com"));
+
+        when(inviteRepository.findByToken(TOKEN))
+                .thenReturn(Optional.of(invitation));
 
         assertThatThrownBy(() -> inviteService.acceptInvite(TOKEN, 5L))
                 .isInstanceOf(ForbiddenActionException.class)
@@ -206,22 +239,31 @@ class InviteServiceTest {
     @Test
     void acceptInvite_addsUserToCompany_andMarksInvitationAccepted() {
         Company company = company(10L);
-        CompanyInvitation invitation = new CompanyInvitation("john@acme.com", company, null, TOKEN);
-        User accepter = user(5L, CompanyRole.USER, null, "john@acme.com");
+        CompanyInvitation invitation =
+                new CompanyInvitation("john@acme.com", company, null, TOKEN);
+
+        User accepter =
+                user(5L, CompanyRole.USER, null, "john@acme.com");
+
         when(userService.findUser(5L)).thenReturn(accepter);
-        when(inviteRepository.findByToken(TOKEN)).thenReturn(Optional.of(invitation));
+        when(inviteRepository.findByToken(TOKEN))
+                .thenReturn(Optional.of(invitation));
 
         inviteService.acceptInvite(TOKEN, 5L);
 
-        verify(companyService).addUserToCompany(new AddUserToCompanyRequest(5L, false), 10L);
-        assertThat(invitation.getInvitationStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+        verify(companyService)
+                .addUserToCompany(new AddUserToCompanyRequest(5L, false), 10L);
+
+        assertThat(invitation.getInvitationStatus())
+                .isEqualTo(InvitationStatus.ACCEPTED);
     }
 
     // ── lookups ─────────────────────────────────────────────────────────
 
     @Test
     void findByToken_throwsInvitationNotFound_whenTokenIsUnknown() {
-        when(inviteRepository.findByToken("unknown-token")).thenReturn(Optional.empty());
+        when(inviteRepository.findByToken("unknown-token"))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> inviteService.findByToken("unknown-token"))
                 .isInstanceOf(InvitationNotFoundException.class);
@@ -230,10 +272,14 @@ class InviteServiceTest {
     @Test
     void getUserInvites_returnsInvitations_forTheUsersEmail() {
         User user = user(5L, CompanyRole.USER, null, "john@acme.com");
-        List<CompanyInvitation> invites = List.of(invitation(company(10L), null));
-        when(userService.findUser(5L)).thenReturn(user);
-        when(inviteRepository.findByEmailIgnoreCase("john@acme.com")).thenReturn(invites);
+        List<CompanyInvitation> invites =
+                List.of(invitation(company(10L), null));
 
-        assertThat(inviteService.getUserInvites(5L)).isSameAs(invites);
+        when(userService.findUser(5L)).thenReturn(user);
+        when(inviteRepository.findByEmailIgnoreCase("john@acme.com"))
+                .thenReturn(invites);
+
+        assertThat(inviteService.getUserInvites(5L))
+                .isSameAs(invites);
     }
 }

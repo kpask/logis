@@ -14,6 +14,7 @@ import type {
   ProjectResponse,
   ProjectStatus,
   TimeEntryResponse,
+  TimeWorkedResponse,
   UserResponse,
   WorkplaceResponse,
 } from "../types";
@@ -35,14 +36,18 @@ import {
   StatusBadge,
 } from "../components";
 import {
-  effectiveDurationSeconds,
+  durationToSeconds,
   formatDate,
   formatDuration,
   formatDurationHuman,
   formatMonthDay,
   formatTime,
+  isManagerOrHigher,
   toDateKey,
+  workedSecondsForDate,
+  workedSecondsInMonth,
 } from "../utils";
+import { useI18n } from "../i18n";
 
 // Mirrors the backend ProjectStatus enum.
 const PROJECT_STATUSES: ProjectStatus[] = [
@@ -65,6 +70,8 @@ export default function WorkplacePage({
   onOpenProject,
 }: WorkplacePageProps) {
   const { user } = useAuth();
+  const { t, language } = useI18n();
+
   const [workplace, setWorkplace] = useState<WorkplaceResponse | null>(null);
   const [company, setCompany] = useState<CompanyResponse | null>(null);
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
@@ -74,6 +81,9 @@ export default function WorkplacePage({
 
   // Time tracking / calendar state
   const [timeEntries, setTimeEntries] = useState<TimeEntryResponse[]>([]);
+  // Per-user, per-day worked time computed by the backend (lunch already
+  // deducted) — the frontend only filters and displays these rows.
+  const [timeWorked, setTimeWorked] = useState<TimeWorkedResponse[]>([]);
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -134,15 +144,18 @@ export default function WorkplacePage({
     try {
       // Entries scoped to this workplace by the backend (managers get
       // everyone's entries across its projects, regular members get
-      // only their own).
-      const [wp, proj, entries] = await Promise.all([
+      // only their own). Worked-time totals come pre-computed from the
+      // backend as per-user, per-day rows.
+      const [wp, proj, entries, worked] = await Promise.all([
         workplacesApi.get(workplaceId),
         workplacesApi.getProjects(workplaceId),
         timeTrackingApi.getByWorkplace(workplaceId),
+        timeTrackingApi.getTimeWorkedByWorkplace(workplaceId),
       ]);
       setWorkplace(wp);
       setProjects(proj);
       setTimeEntries(entries);
+      setTimeWorked(worked);
 
       if (wp.companyId) {
         const comp = await companiesApi.get(wp.companyId);
@@ -154,7 +167,7 @@ export default function WorkplacePage({
           try {
             const memberList = await companiesApi.getMembers(wp.companyId);
             const me = memberList.find((m) => m.id === user.id);
-            setIsManager(me?.companyRole === "MANAGER");
+            setIsManager(isManagerOrHigher(me?.companyRole));
             setMembers(memberList);
           } catch {
             setIsManager(false);
@@ -212,7 +225,7 @@ export default function WorkplacePage({
     e.preventDefault();
     if (!workplace) return;
     if (!editName.trim()) {
-      setEditError("Workplace name is required.");
+      setEditError(t("createWorkplaceNameRequired"));
       return;
     }
 
@@ -236,7 +249,7 @@ export default function WorkplacePage({
   async function handleDeleteWorkplace() {
     if (!workplace) return;
     const confirmed = window.confirm(
-      `Delete "${workplace.name}"? This will permanently remove the workplace and all of its projects and time entries.`
+      t("workplacesDeleteConfirm").replace("{name}", workplace.name)
     );
     if (!confirmed) return;
 
@@ -257,7 +270,7 @@ export default function WorkplacePage({
     setProjectError(null);
 
     if (!projectName.trim()) {
-      setProjectError("Project name is required.");
+      setProjectError(t("createProjectNameRequired"));
       return;
     }
 
@@ -316,7 +329,7 @@ export default function WorkplacePage({
 
   async function handleDeleteProject(project: ProjectResponse) {
     const confirmed = window.confirm(
-      `Delete "${project.projectName}"? This will permanently remove the project and all of its time entries.`
+      t("projectDeleteConfirm").replace("{name}", project.projectName)
     );
     if (!confirmed) return;
 
@@ -333,7 +346,7 @@ export default function WorkplacePage({
   }
 
   if (loading) {
-    return <LoadingState label="Loading workplace…" />;
+    return <LoadingState label={t("workplaceLoading")} />;
   }
 
   if (error || !workplace) {
@@ -342,11 +355,11 @@ export default function WorkplacePage({
         <div className="card">
           <EmptyState
             icon={<IconMapPin />}
-            title="You don't have access to this workplace."
-            description="You're not a member of this workplace. Ask your company manager to add you to it."
+            title={t("workplaceNoAccessTitle")}
+            description={t("workplaceNoAccessDesc")}
             actions={
               <button className="btn btn-secondary" onClick={onBack}>
-                Back to dashboard
+                {t("backToDashboard")}
               </button>
             }
           />
@@ -355,10 +368,10 @@ export default function WorkplacePage({
     }
     return (
       <div className="card">
-        <Alert>{error || "Workplace not found."}</Alert>
+        <Alert>{error || t("workplaceNotFound")}</Alert>
         <div style={{ marginTop: 16 }}>
           <button className="btn btn-secondary" onClick={onBack}>
-            Back to dashboard
+            {t("backToDashboard")}
           </button>
         </div>
       </div>
@@ -375,31 +388,32 @@ export default function WorkplacePage({
   // Only completed (stopped) entries count toward totals.
   const completedEntries = visibleEntries.filter((e) => e.endTime);
 
+  // Backend-computed worked rows, narrowed by the manager member filter just
+  // like the entries above. Each row is one user's total for one day with
+  // company rules (lunch) already applied — no frontend math.
+  const visibleWorkedRows =
+    isManager && selectedMember !== "all"
+      ? timeWorked.filter((row) => row.userId === selectedMember)
+      : timeWorked;
+
   // Days that have at least one logged entry (red on the calendar).
-  const workedDays = new Set(
-    completedEntries.map((e) => toDateKey(new Date(e.startTime)))
-  );
+  const workedDays = new Set(visibleWorkedRows.map((row) => row.date));
 
   // Total worked within the currently displayed calendar month.
-  const monthTotalSeconds = completedEntries
-    .filter((e) => {
-      const d = new Date(e.startTime);
-      return d.getFullYear() === viewYear && d.getMonth() === viewMonth;
-    })
-    .reduce(
-      (sum, entry) =>
-        sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
-      0
-    );
+  const monthTotalSeconds = workedSecondsInMonth(
+    visibleWorkedRows,
+    viewYear,
+    viewMonth
+  );
 
   // Entries for the currently selected date only.
   const selectedEntries = completedEntries.filter(
     (e) => toDateKey(new Date(e.startTime)) === selectedDate
   );
-  const selectedTotalSeconds = selectedEntries.reduce(
-    (sum, entry) =>
-      sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
-    0
+  // Total worked for the selected day.
+  const selectedTotalSeconds = workedSecondsForDate(
+    visibleWorkedRows,
+    selectedDate
   );
 
   const showWorkerColumn = isManager && selectedMember === "all";
@@ -420,7 +434,7 @@ export default function WorkplacePage({
                 onBack();
               }}
             >
-              Dashboard
+              {t("dashboardTitle")}
             </a>{" "}
             / {workplace.name}
           </div>
@@ -443,7 +457,7 @@ export default function WorkplacePage({
                   onClick={openEditWorkplaceModal}
                 >
                   <IconMapPin />
-                  Edit
+                  {t("edit")}
                 </button>
                 <button
                   className="btn btn-danger btn-sm"
@@ -451,14 +465,14 @@ export default function WorkplacePage({
                   disabled={workplaceDeleting}
                 >
                   <IconTrash />
-                  {workplaceDeleting ? "Deleting…" : "Delete workplace"}
+                  {workplaceDeleting ? t("deleting") : t("deleteWorkplace")}
                 </button>
               </>
             )}
           </div>
           <p className="page-header-subtitle">
-            {company?.name || "Company"} ·{" "}
-            {workplace.location?.city || "No location set"}
+            {company?.name || t("companyFallback")} ·{" "}
+            {workplace.location?.city || t("noLocationSet")}
           </p>
         </div>
       </div>
@@ -496,14 +510,14 @@ export default function WorkplacePage({
                       ? `, ${workplace.location.address}`
                       : ""
                   }`
-                : "No location set"}
+                : t("noLocationSet")}
             </div>
           </div>
         </div>
       </div>
 
       <div className="section-header">
-        <h2>Projects</h2>
+        <h2>{t("projectsTitle")}</h2>
         {isManager && (
           <div className="section-header-actions">
             <button
@@ -511,7 +525,7 @@ export default function WorkplacePage({
               onClick={() => setShowCreateProject(true)}
             >
               <IconPlus />
-              Create project
+              {t("projectsCreateProject")}
             </button>
           </div>
         )}
@@ -527,8 +541,8 @@ export default function WorkplacePage({
         <div className="card">
           <EmptyState
             icon={<IconFolder />}
-            title="No projects in this workplace yet."
-            description="Create a project to start tracking time. If you don't see a create button, ask a company manager to create projects."
+            title={t("projectsNoProjectsTitle")}
+            description={t("projectsNoProjectsDesc")}
             actions={
               isManager ? (
                 <button
@@ -536,7 +550,7 @@ export default function WorkplacePage({
                   onClick={() => setShowCreateProject(true)}
                 >
                   <IconPlus />
-                  Create project
+                  {t("projectsCreateProject")}
                 </button>
               ) : undefined
             }
@@ -547,11 +561,11 @@ export default function WorkplacePage({
           <table className="table">
             <thead>
               <tr>
-                <th>Project</th>
-                <th>Status</th>
-                <th>Start date</th>
-                <th>Deadline</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                <th>{t("colProject")}</th>
+                <th>{t("colStatus")}</th>
+                <th>{t("colStartDate")}</th>
+                <th>{t("colDeadline")}</th>
+                <th style={{ textAlign: "right" }}>{t("colActions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -565,8 +579,8 @@ export default function WorkplacePage({
                   <td>
                     <StatusBadge status={project.projectStatus} />
                   </td>
-                  <td>{formatDate(project.startDate)}</td>
-                  <td>{formatDate(project.deadline)}</td>
+                  <td>{formatDate(project.startDate, language)}</td>
+                  <td>{formatDate(project.deadline, language)}</td>
                   <td style={{ textAlign: "right" }}>
                     {isManager ? (
                       <div
@@ -582,9 +596,9 @@ export default function WorkplacePage({
                             e.stopPropagation();
                             openEditProjectModal(project);
                           }}
-                          title="Edit project"
+                          title={t("editProjectTitle")}
                         >
-                          Edit
+                          {t("edit")}
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
@@ -593,7 +607,7 @@ export default function WorkplacePage({
                             handleDeleteProject(project);
                           }}
                           disabled={projectDeletingId === project.id}
-                          title="Delete project"
+                          title={t("deleteProjectTitle")}
                         >
                           <IconTrash />
                         </button>
@@ -609,7 +623,7 @@ export default function WorkplacePage({
         </div>
       )}
 
-      <h2 style={{ marginBottom: 16 }}>Time tracking</h2>
+      <h2 style={{ marginBottom: 16 }}>{t("timeTrackingTitle")}</h2>
 
       <div className="grid" style={{ alignItems: "start" }}>
         <div className="card calendar-card" style={{ marginBottom: 24 }}>
@@ -645,10 +659,14 @@ export default function WorkplacePage({
               marginBottom: 16,
             }}
           >
-            <h2 style={{ margin: 0 }}>{formatMonthDay(selectedDate)}</h2>
+            <h2 style={{ margin: 0 }}>
+              {formatMonthDay(selectedDate, language)}
+            </h2>
             {selectedEntries.length > 0 && (
               <span className="badge badge-primary">
-                {formatDurationHuman(selectedTotalSeconds)} logged
+                {t("loggedSuffix", {
+                  time: formatDurationHuman(selectedTotalSeconds, language),
+                })}
               </span>
             )}
           </div>
@@ -657,8 +675,8 @@ export default function WorkplacePage({
             <div className="card" style={{ marginBottom: 24 }}>
               <EmptyState
                 icon={<IconClock />}
-                title="No time logged on this day."
-                description="Click any worked day in the calendar to see its entries across this workplace's projects."
+                title={t("timeTrackingNoEntriesTitle")}
+                description={t("timeTrackingNoEntriesDesc")}
               />
             </div>
           ) : (
@@ -669,26 +687,22 @@ export default function WorkplacePage({
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Lunch</th>
-                    <th>Worked</th>
-                    <th>Project</th>
-                    {showWorkerColumn && <th>Worker</th>}
+                    <th>{t("colStart")}</th>
+                    <th>{t("colEnd")}</th>
+                    <th>{t("colWorked")}</th>
+                    <th>{t("colProject")}</th>
+                    {showWorkerColumn && <th>{t("colWorker")}</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {selectedEntries.map((entry) => (
                     <tr key={entry.id}>
-                      <td>{formatTime(entry.startTime)}</td>
-                      <td>{formatTime(entry.endTime)}</td>
-                      <td className="muted">{entry.lunchLength}m</td>
+                      <td>{formatTime(entry.startTime, language)}</td>
+                      <td>{formatTime(entry.endTime, language)}</td>
                       <td style={{ fontWeight: 500 }}>
                         {formatDuration(
-                          effectiveDurationSeconds(
-                            entry.duration,
-                            entry.lunchLength
-                          )
+                          durationToSeconds(entry.duration),
+                          language
                         )}
                       </td>
                       <td className="muted">
@@ -705,13 +719,13 @@ export default function WorkplacePage({
                 <tfoot>
                   <tr>
                     <td
-                      colSpan={showWorkerColumn ? 5 : 4}
+                      colSpan={showWorkerColumn ? 4 : 3}
                       style={{ fontWeight: 600 }}
                     >
-                      Total
+                      {t("colTotal")}
                     </td>
                     <td style={{ fontWeight: 700 }}>
-                      {formatDurationHuman(selectedTotalSeconds)}
+                      {formatDurationHuman(selectedTotalSeconds, language)}
                     </td>
                   </tr>
                 </tfoot>
@@ -723,8 +737,8 @@ export default function WorkplacePage({
 
       {showEditWorkplace && (
         <Modal
-          title="Edit workplace"
-          description="Update the name, location and clock-in fence of this workplace."
+          title={t("editWorkplaceTitle")}
+          description={t("editWorkplaceDesc")}
           onClose={() => setShowEditWorkplace(false)}
           footer={
             <>
@@ -733,14 +747,16 @@ export default function WorkplacePage({
                 onClick={() => setShowEditWorkplace(false)}
                 disabled={editSubmitting}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleSaveWorkplace}
                 disabled={editSubmitting}
               >
-                {editSubmitting ? "Saving…" : "Save changes"}
+                {editSubmitting
+                  ? t("editCompanySubmitting")
+                  : t("editCompanySubmit")}
               </button>
             </>
           }
@@ -753,7 +769,7 @@ export default function WorkplacePage({
           <form onSubmit={handleSaveWorkplace}>
             <div className="form-group">
               <label className="form-label" htmlFor="workplace-name">
-                Workplace name
+                {t("createWorkplaceNameLabel")}
               </label>
               <input
                 id="workplace-name"
@@ -766,7 +782,7 @@ export default function WorkplacePage({
             </div>
             <div className="form-group">
               <label className="form-label">
-                Location — click the map or search for the address
+                {t("editWorkplaceLocationLabel")}
               </label>
               <MapPicker
                 value={editLocation}
@@ -776,7 +792,10 @@ export default function WorkplacePage({
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="workplace-radius">
-                Clock-in fence radius: <strong>{editRadius} m</strong>
+                {t("editWorkplaceRadiusLabel").replace(
+                  "{radius}",
+                  String(editRadius)
+                )}
               </label>
               <input
                 id="workplace-radius"
@@ -789,11 +808,7 @@ export default function WorkplacePage({
                 onChange={(e) => setEditRadius(Number(e.target.value))}
                 disabled={editSubmitting}
               />
-              <div className="muted small">
-                Workers must be within this distance of the location for their
-                time entry to be logged as on-site. Entries outside are still
-                allowed but flagged.
-              </div>
+              <div className="muted small">{t("editWorkplaceRadiusDesc")}</div>
             </div>
           </form>
         </Modal>
@@ -801,8 +816,8 @@ export default function WorkplacePage({
 
       {showCreateProject && (
         <Modal
-          title="Create project"
-          description={`Project in ${workplace.name}`}
+          title={t("createProjectTitle")}
+          description={t("createProjectDesc").replace("{name}", workplace.name)}
           onClose={() => setShowCreateProject(false)}
           footer={
             <>
@@ -811,14 +826,16 @@ export default function WorkplacePage({
                 onClick={() => setShowCreateProject(false)}
                 disabled={projectSubmitting}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleCreateProject}
                 disabled={projectSubmitting}
               >
-                {projectSubmitting ? "Creating…" : "Create project"}
+                {projectSubmitting
+                  ? t("createProjectSubmitting")
+                  : t("createProjectSubmit")}
               </button>
             </>
           }
@@ -831,13 +848,13 @@ export default function WorkplacePage({
           <form onSubmit={handleCreateProject}>
             <div className="form-group">
               <label className="form-label" htmlFor="project-name">
-                Project name
+                {t("createProjectNameLabel")}
               </label>
               <input
                 id="project-name"
                 type="text"
                 className="form-input"
-                placeholder="e.g. Website redesign"
+                placeholder={t("createProjectNamePlaceholder")}
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 disabled={projectSubmitting}
@@ -845,7 +862,7 @@ export default function WorkplacePage({
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="project-start">
-                Start date
+                {t("colStartDate")}
               </label>
               <input
                 id="project-start"
@@ -858,7 +875,7 @@ export default function WorkplacePage({
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="project-deadline">
-                Deadline
+                {t("colDeadline")}
               </label>
               <input
                 id="project-deadline"
@@ -875,10 +892,11 @@ export default function WorkplacePage({
 
       {showEditProject && (
         <Modal
-          title="Edit project"
-          description={`Update details for ${
-            editProjectName || "this project"
-          }.`}
+          title={t("editProjectTitle")}
+          description={t("editProjectDesc").replace(
+            "{name}",
+            editProjectName || t("projectFallback")
+          )}
           onClose={() => setShowEditProject(false)}
           footer={
             <>
@@ -887,14 +905,16 @@ export default function WorkplacePage({
                 onClick={() => setShowEditProject(false)}
                 disabled={editProjectSubmitting}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleEditProject}
                 disabled={editProjectSubmitting}
               >
-                {editProjectSubmitting ? "Saving…" : "Save changes"}
+                {editProjectSubmitting
+                  ? t("editCompanySubmitting")
+                  : t("editCompanySubmit")}
               </button>
             </>
           }
@@ -912,13 +932,13 @@ export default function WorkplacePage({
           >
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-name">
-                Project name
+                {t("createProjectNameLabel")}
               </label>
               <input
                 id="edit-project-name"
                 type="text"
                 className="form-input"
-                placeholder="e.g. Website redesign"
+                placeholder={t("createProjectNamePlaceholder")}
                 value={editProjectName}
                 onChange={(e) => setEditProjectName(e.target.value)}
                 disabled={editProjectSubmitting}
@@ -926,7 +946,7 @@ export default function WorkplacePage({
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-start">
-                Start date
+                {t("colStartDate")}
               </label>
               <input
                 id="edit-project-start"
@@ -939,7 +959,7 @@ export default function WorkplacePage({
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="edit-project-deadline">
-                Deadline
+                {t("colDeadline")}
               </label>
               <input
                 id="edit-project-deadline"
@@ -951,7 +971,7 @@ export default function WorkplacePage({
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Status</label>
+              <label className="form-label">{t("colStatus")}</label>
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 10 }}
               >

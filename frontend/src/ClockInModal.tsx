@@ -2,33 +2,22 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import { distanceMeters } from "./utils";
 import type { WorkplaceResponse } from "./types";
+import { useI18n } from "./i18n";
 
 interface ClockInModalProps {
   workplace: WorkplaceResponse | null;
-  /**
-   * The worker's browser position. Null when geolocation was denied or
-   * unavailable — the entry will then be flagged LOGGED_OUTSIDE by the backend.
-   */
   position: { latitude: number; longitude: number } | null;
   onConfirm: () => void;
   onClose: () => void;
 }
 
-/**
- * Confirmation popup shown ONLY when the worker appears to be outside the
- * workplace work area (or their location is unknown). Starting the timer
- * while inside the fence never opens this modal.
- *
- * Shows the workplace fence circle and the worker's position dot on a map so
- * they can see where the browser thinks they are, and lets them start the
- * timer anyway (the entry will be flagged as logged outside).
- */
 export default function ClockInModal({
   workplace,
   position,
   onConfirm,
   onClose,
 }: ClockInModalProps) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -48,18 +37,18 @@ export default function ClockInModal({
       : null;
 
   const reason = position
-    ? `You are ${distance} m from ${
-        workplace?.name ?? "the workplace"
-      } — outside the work area.`
-    : "Your location is unavailable — the entry will be flagged as logged outside.";
+    ? t("clockInReasonOutside", {
+        distance: distance ?? 0,
+        workplace: workplace?.name ?? t("clockInWorkplaceFallback"),
+      })
+    : t("clockInReasonUnavailable");
 
-  // ── map: workplace fence + worker dot ──────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const center: [number, number] = wp
       ? [wp.latitude, wp.longitude]
-      : [54.6872, 25.2797]; // fallback: Vilnius
+      : [54.6872, 25.2797];
     const map = L.map(containerRef.current, { center, zoom: 16 });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
@@ -72,7 +61,7 @@ export default function ClockInModal({
     if (wp) {
       L.marker([wp.latitude, wp.longitude])
         .addTo(map)
-        .bindTooltip(workplace?.name || "Workplace");
+        .bindTooltip(workplace?.name || t("projectWorkplaceFallback"));
       const fence = L.circle([wp.latitude, wp.longitude], {
         radius,
         color: "#2f7d32",
@@ -84,7 +73,6 @@ export default function ClockInModal({
     }
 
     if (position) {
-      // Just the dot — no accuracy circle.
       L.circleMarker([position.latitude, position.longitude], {
         radius: 7,
         color: "#1d4ed8",
@@ -113,10 +101,9 @@ export default function ClockInModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Outside the work area</h3>
+        <h3 className="modal-title">{t("clockInTitle")}</h3>
         <p className="muted small" style={{ marginTop: -4 }}>
-          {reason} You can still start the timer, but this time entry will be
-          flagged as <strong>logged outside</strong>.
+          {reason} {t("clockInDesc")}
         </p>
 
         <div
@@ -127,10 +114,10 @@ export default function ClockInModal({
 
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Cancel
+            {t("cancel")}
           </button>
           <button type="button" className="btn btn-primary" onClick={onConfirm}>
-            Start timer anyway
+            {t("clockInConfirm")}
           </button>
         </div>
       </div>

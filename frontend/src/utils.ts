@@ -2,6 +2,28 @@
 // Logis - Utility helpers
 // ============================================================
 
+import type { CompanyRole, Language, TimeWorkedResponse } from "./types";
+
+/**
+ * Map a Language code ("EN" | "LT") to a BCP-47 locale string suitable for
+ * Intl.* / toLocale* APIs.
+ */
+function languageToLocale(language: Language): string {
+  return language === "LT" ? "lt-LT" : "en-GB";
+}
+
+/**
+ * Whether a company role grants manager-level privileges in the UI
+ * (MANAGER and OWNER). The backend remains the source of truth for
+ * authorization — this only gates UI affordances like invite/create/
+ * promote/kick buttons.
+ */
+export function isManagerOrHigher(
+  role: CompanyRole | null | undefined
+): boolean {
+  return role === "MANAGER" || role === "OWNER";
+}
+
 /**
  * Sanitize a value into a finite non-negative number of seconds.
  * Returns 0 when the value is invalid (NaN, null, undefined, negative).
@@ -13,15 +35,28 @@ function safeSeconds(value: unknown): number {
 }
 
 /**
- * Format a duration (in seconds) as "Xh Ym" or "Ym Zs".
- * Never returns NaN - invalid input yields "0s".
+ * Format a duration (in seconds) as "Xh Ym" or "Ym Zs" (EN) /
+ * "X val Y min" or "Y min Z s" (LT).
+ * Never returns NaN - invalid input yields "0s" / "0 s".
  */
-export function formatDuration(totalSeconds: number): string {
+export function formatDuration(
+  totalSeconds: number,
+  language: Language = "EN"
+): string {
   const total = safeSeconds(totalSeconds);
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = Math.floor(total % 60);
 
+  if (language === "LT") {
+    if (hours > 0) {
+      return `${hours} val ${minutes} min`;
+    }
+    if (minutes > 0) {
+      return `${minutes} min ${seconds} s`;
+    }
+    return `${seconds} s`;
+  }
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   }
@@ -33,13 +68,26 @@ export function formatDuration(totalSeconds: number): string {
 
 /**
  * Format a human-friendly duration in the requested compact form:
- * "45m", "1h 05m", "7h 32m". Never returns NaN.
+ * "45m", "1h 05m", "7h 32m" (EN) / "45 min", "1 val 05 min", "7 val 32 min" (LT).
+ * Never returns NaN.
  */
-export function formatDurationHuman(totalSeconds: number): string {
+export function formatDurationHuman(
+  totalSeconds: number,
+  language: Language = "EN"
+): string {
   const total = safeSeconds(totalSeconds);
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
 
+  if (language === "LT") {
+    if (hours > 0) {
+      return `${hours} val ${String(minutes).padStart(2, "0")} min`;
+    }
+    if (minutes > 0) {
+      return `${minutes} min`;
+    }
+    return `0 min`;
+  }
   if (hours > 0) {
     return `${hours}h ${String(minutes).padStart(2, "0")}m`;
   }
@@ -78,10 +126,13 @@ export function formatTimer(totalSeconds: number): string {
  * Format an ISO date string (e.g. "2026-08-19") as a readable date.
  * Never returns "Invalid Date".
  */
-export function formatDate(isoDate: string | null): string {
+export function formatDate(
+  isoDate: string | null,
+  language: Language = "EN"
+): string {
   const d = parseDate(isoDate);
   if (!d) return "—";
-  return d.toLocaleDateString("en-GB", {
+  return d.toLocaleDateString(languageToLocale(language), {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -92,10 +143,13 @@ export function formatDate(isoDate: string | null): string {
  * Format an ISO instant (e.g. "2026-08-19T10:30:00Z") as a readable time.
  * Never returns "Invalid Date".
  */
-export function formatTime(isoInstant: string | null): string {
+export function formatTime(
+  isoInstant: string | null,
+  language: Language = "EN"
+): string {
   const d = parseDate(isoInstant);
   if (!d) return "—";
-  return d.toLocaleTimeString("en-GB", {
+  return d.toLocaleTimeString(languageToLocale(language), {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -105,10 +159,13 @@ export function formatTime(isoInstant: string | null): string {
  * Format an ISO instant as a readable date + time.
  * Never returns "Invalid Date".
  */
-export function formatDateTime(isoInstant: string | null): string {
+export function formatDateTime(
+  isoInstant: string | null,
+  language: Language = "EN"
+): string {
   const d = parseDate(isoInstant);
   if (!d) return "—";
-  return d.toLocaleString("en-GB", {
+  return d.toLocaleString(languageToLocale(language), {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -163,22 +220,44 @@ export function durationToSeconds(
 }
 
 /**
- * Apply the lunch break to a worked duration. For manual entry durations and
- * daily totals, the lunch reduction is treated as an offset that only applies
- * when the worked duration is longer than the configured lunch length. This
- * keeps short entries at 0 minutes instead of showing a negative working time.
+ * Total worked seconds for one calendar day ("YYYY-MM-DD"), as reported by
+ * the backend's time-worked endpoints. Company rules (e.g. the lunch
+ * deduction) are already applied server-side; this is a pure display
+ * aggregation over the returned rows. When `userId` is given, only that
+ * user's rows are counted (manager member filter).
  */
-export function effectiveDurationSeconds(
-  duration: { seconds: number; nano: number } | number | string | null,
-  lunchLengthMinutes: number | null | undefined
+export function workedSecondsForDate(
+  rows: TimeWorkedResponse[],
+  dateKey: string,
+  userId?: number | null
 ): number {
-  const rawSeconds = durationToSeconds(duration);
-  const lunchMinutes = Number(lunchLengthMinutes ?? 0);
-  if (!Number.isFinite(lunchMinutes) || lunchMinutes <= 0) {
-    return rawSeconds;
-  }
-  const lunchSeconds = Math.max(0, lunchMinutes * 60);
-  return Math.max(0, rawSeconds - lunchSeconds);
+  return rows
+    .filter(
+      (row) => row.date === dateKey && (userId == null || row.userId === userId)
+    )
+    .reduce((sum, row) => sum + durationToSeconds(row.worked), 0);
+}
+
+/**
+ * Total worked seconds within a calendar month, as reported by the
+ * backend's time-worked endpoints. Company rules (e.g. the lunch
+ * deduction) are already applied server-side; this is a pure display
+ * aggregation over the returned rows. When `userId` is given, only that
+ * user's rows are counted (manager member filter).
+ */
+export function workedSecondsInMonth(
+  rows: TimeWorkedResponse[],
+  year: number,
+  month: number, // 0-based, as from Date#getMonth()
+  userId?: number | null
+): number {
+  const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+  return rows
+    .filter(
+      (row) =>
+        row.date.startsWith(prefix) && (userId == null || row.userId === userId)
+    )
+    .reduce((sum, row) => sum + durationToSeconds(row.worked), 0);
 }
 
 /**
@@ -254,10 +333,16 @@ export function toDateKey(date: Date): string {
 /**
  * Format a date key (e.g. "2026-08-25") as "August 25".
  */
-export function formatMonthDay(isoDate: string | null): string {
+export function formatMonthDay(
+  isoDate: string | null,
+  language: Language = "EN"
+): string {
   const d = parseDate(isoDate);
   if (!d) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+  return d.toLocaleDateString(languageToLocale(language), {
+    day: "numeric",
+    month: "long",
+  });
 }
 
 /**

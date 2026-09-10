@@ -47,7 +47,7 @@ public class ProjectService {
         Company company = companyService.findCompany(creator.getCompany().getId());
         Workplace workplace = workplaceService.findWorkplace(request.workplaceId());
 
-        if(!AuthorizationHelper.isManagerOfCompany(creator, company)){
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(creator, company)){
             throw new ForbiddenActionException("User " + creator.getId() + " is not authorized to create projects, because he is not a manager.");
         }
         if(!AuthorizationHelper.isWorkplaceOwnedByCompany(workplace, company)){
@@ -103,13 +103,10 @@ public class ProjectService {
     public ProjectResponse updateProjectStatus(long projectId, ProjectStatus status, Long requesterId) {
         User requester = userService.findUser(requesterId);
         Project project = findProject(projectId);
+        Company projectCompany = project.getWorkplace().getCompany();
 
-        Company company = companyService.findCompany(requester.getCompany().getId());
-        if(!company.getManagers().contains(requester)){
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(requester, projectCompany)){
             throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to change the project status, because he is not a manager.");
-        }
-        if(!project.getWorkplace().getCompany().getId().equals(company.getId())){
-            throw new ResourceNotOwnedException("Project does not belong to the requester's company");
         }
 
         project.setProjectStatus(status);
@@ -134,7 +131,7 @@ public class ProjectService {
         User assigner = userService.findUser(assignerId);
 
         Company company = companyService.findCompany(assigner.getCompany().getId());
-        if(!AuthorizationHelper.isManagerOfCompany(assigner, company)){
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(assigner, company)){
             throw new ForbiddenActionException("User " + assigner.getId() + " is not authorized to assign workers, because he is not a manager.");
         }
         if(!AuthorizationHelper.isWorkplaceOwnedByCompany(project.getWorkplace(), company)){
@@ -192,7 +189,7 @@ public class ProjectService {
         }
 
         Company company = companyService.findCompany(requester.getCompany().getId());
-        if(!AuthorizationHelper.isManagerOfCompany(requester, company)){
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(requester, company)){
             throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to modify the project, because he is not a manager.");
         }
         if(!AuthorizationHelper.isWorkplaceOwnedByCompany(project.getWorkplace(), company)){

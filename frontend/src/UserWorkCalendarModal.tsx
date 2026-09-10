@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage, timeTrackingApi, workplacesApi } from "./api";
-import type { ProjectResponse, TimeEntryResponse, UserResponse } from "./types";
+import type {
+  ProjectResponse,
+  TimeEntryResponse,
+  TimeWorkedResponse,
+  UserResponse,
+} from "./types";
 import {
   Alert,
   EmptyState,
@@ -10,13 +15,16 @@ import {
   MonthCalendar,
 } from "./components";
 import {
-  effectiveDurationSeconds,
+  durationToSeconds,
   formatDuration,
   formatDurationHuman,
   formatMonthDay,
   formatTime,
   toDateKey,
+  workedSecondsForDate,
+  workedSecondsInMonth,
 } from "./utils";
+import { useI18n } from "./i18n";
 
 interface UserWorkCalendarModalProps {
   member: UserResponse;
@@ -33,12 +41,16 @@ export default function UserWorkCalendarModal({
   member,
   onClose,
 }: UserWorkCalendarModalProps) {
+  const { t, language } = useI18n();
   const [entries, setEntries] = useState<TimeEntryResponse[]>([]);
   const [projectNames, setProjectNames] = useState<Map<number, string>>(
     new Map()
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Per-day worked time computed by the backend (lunch already deducted) —
+  // the frontend only displays these rows.
+  const [timeWorked, setTimeWorked] = useState<TimeWorkedResponse[]>([]);
 
   // Calendar state (same pattern as the project view)
   const today = new Date();
@@ -53,9 +65,13 @@ export default function UserWorkCalendarModal({
       setLoading(true);
       setError(null);
       try {
-        // All of the member's entries across every project. Authorization
-        // (manager of the same company) is enforced by the backend.
-        const userEntries = await timeTrackingApi.getByUser(member.id);
+        // All of the member's entries across every project, plus the
+        // backend-computed per-day worked rows. Authorization (manager of
+        // the same company) is enforced by the backend.
+        const [userEntries, workedRows] = await Promise.all([
+          timeTrackingApi.getByUser(member.id),
+          timeTrackingApi.getTimeWorkedByUser(member.id),
+        ]);
 
         // Resolve project names by walking the company's workplaces and
         // their projects, so each entry can display what it was worked on.
@@ -76,6 +92,7 @@ export default function UserWorkCalendarModal({
 
         if (!cancelled) {
           setEntries(userEntries);
+          setTimeWorked(workedRows);
           setProjectNames(names);
         }
       } catch (err) {
@@ -91,31 +108,24 @@ export default function UserWorkCalendarModal({
     };
   }, [member.id]);
 
-  // Only completed (stopped) entries count toward worked days/totals.
+  // Only completed (stopped) entries are listed in the day table.
   const completedEntries = useMemo(
     () => entries.filter((e) => e.endTime),
     [entries]
   );
 
+  // Days that have at least one logged entry (red on the calendar), from the
+  // backend-computed worked rows.
   const workedDays = useMemo(
-    () =>
-      new Set(completedEntries.map((e) => toDateKey(new Date(e.startTime)))),
-    [completedEntries]
+    () => new Set(timeWorked.map((row) => row.date)),
+    [timeWorked]
   );
 
+  // Total worked within the displayed month — read straight from the
+  // backend's rows (company rules like the lunch deduction are applied there).
   const monthTotalSeconds = useMemo(
-    () =>
-      completedEntries
-        .filter((e) => {
-          const d = new Date(e.startTime);
-          return d.getFullYear() === viewYear && d.getMonth() === viewMonth;
-        })
-        .reduce(
-          (sum, entry) =>
-            sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
-          0
-        ),
-    [completedEntries, viewYear, viewMonth]
+    () => workedSecondsInMonth(timeWorked, viewYear, viewMonth),
+    [timeWorked, viewYear, viewMonth]
   );
 
   const selectedEntries = useMemo(
@@ -129,11 +139,8 @@ export default function UserWorkCalendarModal({
     [completedEntries, selectedDate]
   );
 
-  const selectedTotalSeconds = selectedEntries.reduce(
-    (sum, entry) =>
-      sum + effectiveDurationSeconds(entry.duration, entry.lunchLength),
-    0
-  );
+  // Total worked for the selected day.
+  const selectedTotalSeconds = workedSecondsForDate(timeWorked, selectedDate);
 
   function goToPrevMonth() {
     if (viewMonth === 0) {
@@ -155,11 +162,14 @@ export default function UserWorkCalendarModal({
 
   return (
     <Modal
-      title={`Work calendar — ${member.name} ${member.lastname}`}
-      description="Logged time across all projects. Click a marked day to see its entries."
+      title={t("workCalendarTitle", {
+        name: member.name,
+        lastname: member.lastname,
+      })}
+      description={t("workCalendarDesc")}
       onClose={onClose}
     >
-      {loading && <LoadingState label="Loading work calendar…" />}
+      {loading && <LoadingState label={t("loadingWorkCalendar")} />}
 
       {!loading && error && <Alert>{error}</Alert>}
 
@@ -186,10 +196,14 @@ export default function UserWorkCalendarModal({
               flexWrap: "wrap",
             }}
           >
-            <h4 style={{ margin: 0 }}>{formatMonthDay(selectedDate)}</h4>
+            <h4 style={{ margin: 0 }}>
+              {formatMonthDay(selectedDate, language)}
+            </h4>
             {selectedEntries.length > 0 && (
               <span className="badge badge-primary">
-                {formatDurationHuman(selectedTotalSeconds)} logged
+                {t("workCalendarLoggedBadge", {
+                  time: formatDurationHuman(selectedTotalSeconds, language),
+                })}
               </span>
             )}
           </div>
@@ -197,49 +211,47 @@ export default function UserWorkCalendarModal({
           {selectedEntries.length === 0 ? (
             <EmptyState
               icon={<IconClock />}
-              title="No time logged on this day."
-              description="Click any worked day in the calendar to see its entries."
+              title={t("workCalendarNoTimeTitle")}
+              description={t("workCalendarNoTimeDesc")}
             />
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Lunch</th>
-                    <th>Worked</th>
-                    <th>Project</th>
+                    <th>{t("colStart")}</th>
+                    <th>{t("colEnd")}</th>
+                    <th>{t("colWorked")}</th>
+                    <th>{t("colProject")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedEntries.map((entry) => (
                     <tr key={entry.id}>
-                      <td>{formatTime(entry.startTime)}</td>
-                      <td>{formatTime(entry.endTime)}</td>
-                      <td className="muted">{entry.lunchLength}m</td>
+                      <td>{formatTime(entry.startTime, language)}</td>
+                      <td>{formatTime(entry.endTime, language)}</td>
                       <td style={{ fontWeight: 500 }}>
                         {formatDuration(
-                          effectiveDurationSeconds(
-                            entry.duration,
-                            entry.lunchLength
-                          )
+                          durationToSeconds(entry.duration),
+                          language
                         )}
                       </td>
                       <td className="muted">
                         {projectNames.get(entry.projectId) ??
-                          `Project #${entry.projectId}`}
+                          t("workCalendarProjectFallback", {
+                            id: entry.projectId,
+                          })}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={3} style={{ fontWeight: 600 }}>
-                      Total
+                    <td colSpan={2} style={{ fontWeight: 600 }}>
+                      {t("workCalendarTotal")}
                     </td>
                     <td style={{ fontWeight: 700 }}>
-                      {formatDurationHuman(selectedTotalSeconds)}
+                      {formatDurationHuman(selectedTotalSeconds, language)}
                     </td>
                     <td />
                   </tr>

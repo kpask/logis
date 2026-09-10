@@ -9,9 +9,19 @@ import com.example.logis.data.enums.CompanyRole;
 public final class AuthorizationHelper {
     private AuthorizationHelper() {}
 
+    public static boolean isManagerOrHigherOfCompany(User user, Company company) {
+        if(user.getCompany() == null || user.getRole().equals(CompanyRole.USER)){
+            return false;
+        }
+        return company.getId().equals(user.getCompany().getId());
+    }
+
     public static boolean isManagerOfCompany(User user, Company company) {
+        if(user.getCompany() == null || user.getRole().equals(CompanyRole.USER)){
+            return false;
+        }
         return company.getId().equals(user.getCompany().getId())
-                && user.getRole() != CompanyRole.USER;
+                && user.getRole() == CompanyRole.MANAGER;
     }
 
     public static boolean isWorkplaceOwnedByCompany(Workplace workplace, Company company) {
@@ -27,5 +37,21 @@ public final class AuthorizationHelper {
     public static boolean canModifyWorkplace(User user, Workplace workplace) {
         return user.getRole() != CompanyRole.USER
                 && workplace.getCompany().getUsers().contains(user);
+    }
+
+    public static boolean areUsersPartOfSameCompany(User user1, User user2) {
+        return user1.getCompany() != null && user2.getCompany() != null && user1.getCompany().getId().equals(user2.getCompany().getId());
+    }
+
+    public static boolean isUserOwner(User user) {
+        return user.getRole().equals(CompanyRole.OWNER) && user.getCompany() != null;
+    }
+
+
+    public static boolean isUserPartOfCompany(User user, Company company){
+        if (user.getCompany() == null) {
+            return false;
+        }
+        return user.getCompany().getId().equals(company.getId());
     }
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./auth";
+import { I18nProvider } from "./i18n";
 import AppLayout, { type PageKey } from "./AppLayout";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
@@ -10,6 +11,7 @@ import ProjectPage from "./pages/ProjectPage";
 import ProfilePage from "./pages/ProfilePage";
 import InvitesPage from "./pages/InvitesPage";
 import InvitationPage from "./pages/InvitationPage";
+import SettingsPage from "./pages/SettingsPage";
 import { LoadingState } from "./components";
 
 type View =
@@ -129,6 +131,7 @@ function AppContent() {
       )}
       {view.type === "app" && view.page === "invites" && <InvitesPage />}
       {view.type === "app" && view.page === "profile" && <ProfilePage />}
+      {view.type === "app" && view.page === "settings" && <SettingsPage />}
       {view.type === "workplace" && (
         <WorkplacePage
           workplaceId={view.id}
@@ -146,7 +149,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <I18nProvider>
+        <AppContent />
+      </I18nProvider>
     </AuthProvider>
   );
 }

@@ -1,6 +1,9 @@
 package com.example.logis.data.entities;
 import com.example.logis.data.enums.TimeEntryLogStatus;
 import jakarta.persistence.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+
 import java.time.Duration;
 import java.time.Instant;
 
@@ -10,10 +13,10 @@ public class TimeEntry {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @ManyToOne
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private ProjectWorker projectWorker;
     private Instant startTime;
     private Instant endTime;
-    private Long lunchLength = 30L;
     @Enumerated(EnumType.STRING)
     private TimeEntryLogStatus status = TimeEntryLogStatus.LOGGED;
 
@@ -72,25 +75,8 @@ public class TimeEntry {
         if(end == null){
             end = Instant.now();
         }
-
         Duration duration = Duration.between(startTime, end);
-        if (lunchLength > 0) {
-            duration = duration.minus(Duration.ofMinutes(lunchLength));
-        }
-
         return duration.isNegative() ? Duration.ZERO : duration;
-    }
-
-    public Long getLunchLength() {
-        return lunchLength;
-    }
-
-    public void setLunchLength(Long lunchLength) {
-        if(lunchLength == null || lunchLength <= 0) {
-            this.lunchLength = 0L;
-            return;
-        }
-        this.lunchLength = lunchLength;
     }
 
     public TimeEntryLogStatus getStatus() {

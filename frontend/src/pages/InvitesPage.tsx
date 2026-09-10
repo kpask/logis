@@ -3,27 +3,37 @@ import { useAuth } from "../auth";
 import { getErrorMessage, invitationsApi } from "../api";
 import type { InvitationResponse, InvitationStatus } from "../types";
 import { Alert, EmptyState, IconUsers, LoadingState } from "../components";
-import { formatDateTime } from "../utils";
+import { formatDateTime, isManagerOrHigher } from "../utils";
+import { useI18n } from "../i18n";
 
 // ── Status badge (mirrors the project StatusBadge styling) ───
 
 const STATUS_BADGE: Record<
   InvitationStatus,
-  { label: string; className: string }
+  { labelKey: string; className: string }
 > = {
-  PENDING: { label: "Pending", className: "badge-warning" },
-  ACCEPTED: { label: "Accepted", className: "badge-success" },
-  DECLINED: { label: "Declined", className: "badge-danger" },
-  EXPIRED: { label: "Expired", className: "badge-muted" },
-  CANCELLED: { label: "Cancelled", className: "badge-danger" },
+  PENDING: { labelKey: "invitationStatusPending", className: "badge-warning" },
+  ACCEPTED: {
+    labelKey: "invitationStatusAccepted",
+    className: "badge-success",
+  },
+  DECLINED: { labelKey: "invitationStatusDeclined", className: "badge-danger" },
+  EXPIRED: { labelKey: "invitationStatusExpired", className: "badge-muted" },
+  CANCELLED: {
+    labelKey: "invitationStatusCancelled",
+    className: "badge-danger",
+  },
 };
 
 function InvitationStatusBadge({ status }: { status: InvitationStatus }) {
+  const { t } = useI18n();
   const meta = STATUS_BADGE[status] ?? {
-    label: status,
+    labelKey: "invitationStatusPending",
     className: "badge-muted",
   };
-  return <span className={`badge ${meta.className}`}>{meta.label}</span>;
+  return (
+    <span className={`badge ${meta.className}`}>{t(meta.labelKey as any)}</span>
+  );
 }
 
 /** The link an invited person opens. Email delivery is not built yet,
@@ -32,15 +42,9 @@ function invitationLink(token: string): string {
   return `${window.location.origin}/invitations/${token}`;
 }
 
-/**
- * Invites tab:
- * - Everyone sees invitations addressed to them and can accept a pending one
- *   (only possible while they are not part of a company).
- * - Managers additionally see an invite-by-email form and the invitations
- *   they have sent, each with a copyable invitation link (no email yet).
- */
 export default function InvitesPage() {
   const { user, refreshUser } = useAuth();
+  const { t } = useI18n();
 
   const [myInvites, setMyInvites] = useState<InvitationResponse[]>([]);
   const [sentInvites, setSentInvites] = useState<InvitationResponse[]>([]);
@@ -58,7 +62,8 @@ export default function InvitesPage() {
   const [acceptingToken, setAcceptingToken] = useState<string | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
-  const isManager = user?.companyRole === "MANAGER" && user.companyId !== null;
+  const isManager =
+    isManagerOrHigher(user?.companyRole) && user?.companyId != null;
 
   const load = useCallback(async () => {
     setError(null);
@@ -87,7 +92,7 @@ export default function InvitesPage() {
 
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
-      setFormError("Email is required.");
+      setFormError(t("invitesEmailRequired"));
       return;
     }
 
@@ -109,7 +114,6 @@ export default function InvitesPage() {
     setAcceptingToken(invitation.token);
     try {
       await invitationsApi.accept(invitation.token);
-      // The user's company changed — refresh the session user, then reload.
       await refreshUser();
       await load();
     } catch (err) {
@@ -125,7 +129,6 @@ export default function InvitesPage() {
     try {
       await navigator.clipboard.writeText(link);
     } catch {
-      // Fallback for browsers without the async clipboard API
       const textarea = document.createElement("textarea");
       textarea.value = token;
       document.body.appendChild(textarea);
@@ -138,17 +141,15 @@ export default function InvitesPage() {
   }
 
   if (loading) {
-    return <LoadingState label="Loading invitations…" />;
+    return <LoadingState label={t("loadingInvitations")} />;
   }
 
   return (
     <div className="page-container page-container--compact">
       <div className="page-header">
         <div>
-          <h1 className="page-header-title">Invites</h1>
-          <p className="page-header-subtitle">
-            Invitations to your company and sent to you
-          </p>
+          <h1 className="page-header-title">{t("invitesTitle")}</h1>
+          <p className="page-header-subtitle">{t("invitesSubtitle")}</p>
         </div>
       </div>
 
@@ -161,17 +162,18 @@ export default function InvitesPage() {
       {/* ── Invite someone (managers) ─────────────────────── */}
       {isManager && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <h3 style={{ margin: "0 0 8px" }}>Invite to your company</h3>
+          <h3 style={{ margin: "0 0 8px" }}>{t("invitesInviteTitle")}</h3>
           <p className="muted small" style={{ margin: "0 0 16px" }}>
-            Email delivery is not set up yet — copy the invitation link and
-            share it with the person you're inviting.
+            {t("invitesInviteDesc")}
           </p>
 
           {created && (
             <div style={{ marginBottom: 16 }}>
               <Alert type="success">
-                Invitation created for <strong>{created.email}</strong>. It is
-                valid until {formatDateTime(created.expiresAt)}.
+                {t("invitesCreatedFor", {
+                  email: created.email,
+                  expiry: formatDateTime(created.expiresAt),
+                })}
               </Alert>
               <div
                 style={{
@@ -200,7 +202,9 @@ export default function InvitesPage() {
                   className="btn btn-secondary btn-sm"
                   onClick={() => copyLink(created.token)}
                 >
-                  {copiedToken === created.token ? "Copied!" : "Copy link"}
+                  {copiedToken === created.token
+                    ? t("invitesCopied")
+                    : t("invitesCopyLink")}
                 </button>
               </div>
             </div>
@@ -230,7 +234,7 @@ export default function InvitesPage() {
               className="btn btn-primary"
               disabled={sending}
             >
-              {sending ? "Sending…" : "Send invitation"}
+              {sending ? t("invitesSending") : t("invitesSendInvitation")}
             </button>
           </form>
         </div>
@@ -239,12 +243,12 @@ export default function InvitesPage() {
       {/* ── Sent invitations (managers) ───────────────────── */}
       {isManager && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <h3 style={{ margin: "0 0 16px" }}>Sent invitations</h3>
+          <h3 style={{ margin: "0 0 16px" }}>{t("invitesSentTitle")}</h3>
           {sentInvites.length === 0 ? (
             <EmptyState
               icon={<IconUsers />}
-              title="No invitations sent yet"
-              description="Invite someone by email above — they'll receive a link to join your company."
+              title={t("invitesSentEmptyTitle")}
+              description={t("invitesSentEmptyDesc")}
             />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -263,7 +267,9 @@ export default function InvitesPage() {
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontWeight: 500 }}>{invitation.email}</div>
                     <div className="muted small">
-                      Valid until {formatDateTime(invitation.expiresAt)}
+                      {t("invitesValidUntil", {
+                        date: formatDateTime(invitation.expiresAt),
+                      })}
                     </div>
                   </div>
                   <InvitationStatusBadge status={invitation.status} />
@@ -274,8 +280,8 @@ export default function InvitesPage() {
                       onClick={() => copyLink(invitation.token)}
                     >
                       {copiedToken === invitation.token
-                        ? "Copied!"
-                        : "Copy link"}
+                        ? t("invitesCopied")
+                        : t("invitesCopyLink")}
                     </button>
                   )}
                 </div>
@@ -287,7 +293,7 @@ export default function InvitesPage() {
 
       {/* ── My invitations ────────────────────────────────── */}
       <div className="card">
-        <h3 style={{ margin: "0 0 16px" }}>My invitations</h3>
+        <h3 style={{ margin: "0 0 16px" }}>{t("invitesMyInvitesTitle")}</h3>
 
         {acceptError && (
           <div style={{ marginBottom: 16 }}>
@@ -298,8 +304,8 @@ export default function InvitesPage() {
         {myInvites.length === 0 ? (
           <EmptyState
             icon={<IconUsers />}
-            title="No invitations"
-            description="When a company manager invites you, it will show up here."
+            title={t("invitesEmptyTitle")}
+            description={t("invitesEmptyDesc")}
           />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -321,15 +327,17 @@ export default function InvitesPage() {
                       {invitation.companyName}
                     </div>
                     <div className="muted small">
-                      {invitation.email} · valid until{" "}
-                      {formatDateTime(invitation.expiresAt)}
+                      {invitation.email} ·{" "}
+                      {t("invitesValidUntil", {
+                        date: formatDateTime(invitation.expiresAt),
+                      })}
                     </div>
                   </div>
                   <InvitationStatusBadge status={invitation.status} />
                   {invitation.status === "PENDING" &&
                     (user?.companyId ? (
                       <span className="muted small">
-                        You're already in a company
+                        {t("invitesAlreadyInCompany")}
                       </span>
                     ) : (
                       <button
@@ -339,8 +347,8 @@ export default function InvitesPage() {
                         onClick={() => handleAccept(invitation)}
                       >
                         {acceptingToken === invitation.token
-                          ? "Accepting…"
-                          : "Accept"}
+                          ? t("invitesAccepting")
+                          : t("invitesAccept")}
                       </button>
                     ))}
                 </div>

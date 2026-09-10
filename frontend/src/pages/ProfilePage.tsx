@@ -4,9 +4,11 @@ import { companiesApi, getErrorMessage } from "../api";
 import type { CompanyResponse } from "../types";
 import { Alert } from "../components";
 import { getInitials } from "../utils";
+import { useI18n } from "../i18n";
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [company, setCompany] = useState<CompanyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +42,8 @@ export default function ProfilePage() {
     <div className="page-container page-container--form">
       <div className="page-header">
         <div>
-          <h1 className="page-header-title">Profile</h1>
-          <p className="page-header-subtitle">Your account information</p>
+          <h1 className="page-header-title">{t("profileTitle")}</h1>
+          <p className="page-header-subtitle">{t("profileSubtitle")}</p>
         </div>
       </div>
 
@@ -91,49 +93,51 @@ export default function ProfilePage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <div className="muted small" style={{ marginBottom: 2 }}>
-                Email
+                {t("profileEmail")}
               </div>
               <div style={{ fontWeight: 500 }}>{user.email}</div>
             </div>
             <div>
               <div className="muted small" style={{ marginBottom: 2 }}>
-                Name
+                {t("profileName")}
               </div>
               <div style={{ fontWeight: 500 }}>{user.name}</div>
             </div>
             <div>
               <div className="muted small" style={{ marginBottom: 2 }}>
-                Last name
+                {t("profileLastName")}
               </div>
               <div style={{ fontWeight: 500 }}>{user.lastname}</div>
             </div>
             <div>
               <div className="muted small" style={{ marginBottom: 2 }}>
-                Username
+                {t("profileUsername")}
               </div>
               <div style={{ fontWeight: 500 }}>@{user.username}</div>
             </div>
             <div>
               <div className="muted small" style={{ marginBottom: 2 }}>
-                Role
+                {t("profileRole")}
               </div>
-              {user.companyRole === "MANAGER" ? (
-                <span className="badge badge-primary">Manager</span>
+              {user.companyRole === "OWNER" ? (
+                <span className="badge badge-primary">{t("roleOwner")}</span>
+              ) : user.companyRole === "MANAGER" ? (
+                <span className="badge badge-primary">{t("roleManager")}</span>
               ) : (
-                <span className="badge badge-muted">Worker</span>
+                <span className="badge badge-muted">{t("roleWorker")}</span>
               )}
             </div>
             <div>
               <div className="muted small" style={{ marginBottom: 2 }}>
-                Company
+                {t("profileCompany")}
               </div>
               {loading ? (
-                <div className="muted small">Loading company…</div>
+                <div className="muted small">{t("profileLoadingCompany")}</div>
               ) : company ? (
                 <div style={{ fontWeight: 500 }}>{company.name}</div>
               ) : (
                 <div className="muted" style={{ fontWeight: 500 }}>
-                  You're not part of a company yet.
+                  {t("profileNoCompany")}
                 </div>
               )}
             </div>

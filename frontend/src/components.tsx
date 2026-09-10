@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useI18n, languageToLocale } from "./i18n";
 import type { ProjectStatus, UserResponse } from "./types";
 import {
   fetchLithuanianHolidayDateKeys,
@@ -18,11 +19,12 @@ import {
 
 // ── Loading ──────────────────────────────────────────────────
 
-export function LoadingState({ label = "Loading…" }: { label?: string }) {
+export function LoadingState({ label }: { label?: string }) {
+  const { t } = useI18n();
   return (
     <div className="loading-state">
       <div className="spinner" />
-      <span>{label}</span>
+      <span>{label ?? t("loading")}</span>
     </div>
   );
 }
@@ -98,26 +100,29 @@ export function Alert({ type = "error", children }: AlertProps) {
 
 const STATUS_BADGE: Record<
   ProjectStatus,
-  { label: string; className: string }
+  { labelKey: string; className: string }
 > = {
-  PENDING: { label: "Pending", className: "badge-warning" },
-  ACTIVE: { label: "Active", className: "badge-success" },
-  COMPLETED: { label: "Completed", className: "badge-primary" },
-  CANCELLED: { label: "Cancelled", className: "badge-danger" },
-  ON_HOLD: { label: "On hold", className: "badge-muted" },
+  PENDING: { labelKey: "projectStatusPending", className: "badge-warning" },
+  ACTIVE: { labelKey: "projectStatusActive", className: "badge-success" },
+  COMPLETED: { labelKey: "projectStatusCompleted", className: "badge-primary" },
+  CANCELLED: { labelKey: "projectStatusCancelled", className: "badge-danger" },
+  ON_HOLD: { labelKey: "projectStatusOnHold", className: "badge-muted" },
 };
 
 export function StatusBadge({ status }: { status: ProjectStatus }) {
+  const { t } = useI18n();
   const meta = STATUS_BADGE[status] ?? {
-    label: status,
+    labelKey: status,
     className: "badge-muted",
   };
-  return <span className={`badge ${meta.className}`}>{meta.label}</span>;
+  return (
+    <span className={`badge ${meta.className}`}>{t(meta.labelKey as any)}</span>
+  );
 }
 
 // ── Month calendar ───────────────────────────────────────────
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Weekday labels are resolved via t() in MonthCalendar — see below.
 
 function buildCalendarCells(year: number, month: number): Date[] {
   const first = new Date(year, month, 1);
@@ -178,11 +183,22 @@ export function MonthCalendar({
   onSelectDate,
   monthTotalSeconds,
 }: MonthCalendarProps) {
+  const { t, language } = useI18n();
   const calendarCells = buildCalendarCells(viewYear, viewMonth);
   const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString(
-    "en-GB",
+    languageToLocale(language),
     { month: "long", year: "numeric" }
   );
+
+  const weekdays = [
+    t("weekdayMon"),
+    t("weekdayTue"),
+    t("weekdayWed"),
+    t("weekdayThu"),
+    t("weekdayFri"),
+    t("weekdaySat"),
+    t("weekdaySun"),
+  ];
 
   // Lithuanian public holidays for the displayed year (weekends are
   // computed locally). Loaded from the Nager.Date API with an offline
@@ -206,7 +222,7 @@ export function MonthCalendar({
           onClick={onPrevMonth}
           type="button"
         >
-          ← Prev
+          ← {t("calendarPrev")}
         </button>
         <div className="calendar-month">{monthLabel}</div>
         <button
@@ -214,12 +230,12 @@ export function MonthCalendar({
           onClick={onNextMonth}
           type="button"
         >
-          Next →
+          {t("calendarNext")} →
         </button>
       </div>
 
       <div className="calendar-grid" role="grid">
-        {WEEKDAYS.map((day) => (
+        {weekdays.map((day) => (
           <div key={day} className="calendar-weekday">
             {day}
           </div>
@@ -252,19 +268,21 @@ export function MonthCalendar({
 
       <div className="calendar-legend">
         <span>
-          <span className="legend-dot worked" /> Worked
+          <span className="legend-dot worked" /> {t("calendarLegendWorked")}
         </span>
         <span>
-          <span className="legend-dot nonwork" /> Weekend / Holiday
+          <span className="legend-dot nonwork" />{" "}
+          {t("calendarLegendWeekendHoliday")}
         </span>
         <span>
-          <span className="legend-dot selected" /> Selected
+          <span className="legend-dot selected" /> {t("calendarLegendSelected")}
         </span>
       </div>
 
       {monthTotalSeconds !== undefined && (
         <div className="muted small" style={{ marginTop: 12 }}>
-          Worked this month · {formatDurationHuman(monthTotalSeconds)}
+          {t("calendarWorkedThisMonth")} ·{" "}
+          {formatDurationHuman(monthTotalSeconds, language)}
         </div>
       )}
     </>
@@ -293,6 +311,7 @@ interface DropdownMenuProps {
  * `overflow: auto`) that would clip an absolutely-positioned dropdown.
  */
 export function DropdownMenu({ items, disabled, title }: DropdownMenuProps) {
+  const { t } = useI18n();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -349,7 +368,7 @@ export function DropdownMenu({ items, disabled, title }: DropdownMenuProps) {
         className="btn btn-secondary btn-sm dropdown-trigger"
         onClick={toggle}
         disabled={disabled}
-        title={title ?? "Actions"}
+        title={title ?? t("dropdownActionsDefault")}
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -404,6 +423,7 @@ export function MemberSelect({
   onChange,
   disabled,
 }: MemberSelectProps) {
+  const { t } = useI18n();
   return (
     <label
       style={{
@@ -413,7 +433,7 @@ export function MemberSelect({
         flexWrap: "wrap",
       }}
     >
-      <span className="muted small">Member</span>
+      <span className="muted small">{t("memberFilterLabel")}</span>
       <select
         className="form-input"
         style={{ width: "auto" }}
@@ -423,7 +443,7 @@ export function MemberSelect({
         }
         disabled={disabled}
       >
-        <option value="all">All members</option>
+        <option value="all">{t("memberFilterAll")}</option>
         {members.map((member) => (
           <option key={member.id} value={member.id}>
             {member.name} {member.lastname}
@@ -684,6 +704,24 @@ export function IconTrash() {
       <path d="M10 11v5" />
       <path d="M14 11v5" />
       <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+export function IconSettings() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }

@@ -2,13 +2,13 @@ package com.example.logis.services;
 
 import com.example.logis.data.entities.CompanyInvitation;
 import com.example.logis.data.entities.User;
-import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.enums.InvitationStatus;
 import com.example.logis.dtos.requests.AddUserToCompanyRequest;
 import com.example.logis.dtos.responses.InvitationResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.InvitationNotFoundException;
 import com.example.logis.repository.InviteRepository;
+import com.example.logis.util.AuthorizationHelper;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -28,18 +28,16 @@ public class InviteService {
         this.companyService = companyService;
     }
 
+    @Transactional
     public InvitationResponse createInvitation(Long inviterId, String email) {
         User inviter = userService.findUser(inviterId);
-        if (inviter.getCompany() == null) {
-            throw new ForbiddenActionException("You cannot invite users because you are not part of a company.");
-        }
-        if (inviter.getRole() != CompanyRole.MANAGER) {
-            throw new ForbiddenActionException("As a non-manager you cannot invite users to the company.");
+        if (!AuthorizationHelper.isUserOwner(inviter)) {
+            throw new ForbiddenActionException("You cannot invite users because you are not an owner of a company.");
         }
 
         String normalizedEmail = email.trim().toLowerCase();
         User existingUser = userService.findUserByEmail(normalizedEmail).orElse(null);
-        if (existingUser != null && existingUser.getCompany() != null && existingUser.getCompany().getId().equals(inviter.getCompany().getId())) {
+        if (existingUser != null && AuthorizationHelper.areUsersPartOfSameCompany(inviter, existingUser)) {
             throw new IllegalArgumentException("This user is already a member of your company.");
         }
 

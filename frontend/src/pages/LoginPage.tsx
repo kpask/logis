@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "../auth";
 import { getErrorMessage } from "../api";
 import { Alert } from "../components";
+import { useI18n } from "../i18n";
 
 interface LoginPageProps {
   onNavigateSignup: () => void;
@@ -9,6 +10,7 @@ interface LoginPageProps {
 
 export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
   const { login } = useAuth();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,15 +21,13 @@ export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
     setError(null);
 
     if (!email.trim() || !password) {
-      setError("Please enter your email and password.");
+      setError(t("loginErrorCredentials"));
       return;
     }
 
     setSubmitting(true);
     try {
       await login({ email: email.trim(), password });
-      // On success, the auth context sets the user and AppContent renders
-      // the dashboard automatically.
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -39,14 +39,12 @@ export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-         <div className="auth-logo-icon">L</div>
-         <div className="auth-logo-text">Logis</div>
+          <div className="auth-logo-icon">L</div>
+          <div className="auth-logo-text">Logis</div>
         </div>
 
-        <h1 className="auth-title">Sign in</h1>
-        <p className="auth-subtitle">
-          Welcome back. Enter your credentials to continue.
-        </p>
+        <h1 className="auth-title">{t("loginTitle")}</h1>
+        <p className="auth-subtitle">{t("loginSubtitle")}</p>
 
         {error && (
           <div style={{ marginBottom: 16 }}>
@@ -57,7 +55,7 @@ export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label" htmlFor="email">
-              Email
+              {t("loginEmail")}
             </label>
             <input
               id="email"
@@ -73,7 +71,7 @@ export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">
-              Password
+              {t("loginPassword")}
             </label>
             <input
               id="password"
@@ -92,12 +90,12 @@ export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
             className="btn btn-primary btn-lg btn-block"
             disabled={submitting}
           >
-            {submitting ? "Signing in…" : "Sign in"}
+            {submitting ? t("loginSubmitting") : t("loginSubmit")}
           </button>
         </form>
 
         <div className="auth-footer">
-          Don't have an account?{" "}
+          {t("loginNoAccount")}{" "}
           <a
             href="#"
             onClick={(e) => {
@@ -105,7 +103,7 @@ export default function LoginPage({ onNavigateSignup }: LoginPageProps) {
               onNavigateSignup();
             }}
           >
-            Create an account
+            {t("loginCreateAccount")}
           </a>
         </div>
       </div>

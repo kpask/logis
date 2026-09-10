@@ -14,6 +14,7 @@ import {
 } from "../components";
 import type { DropdownMenuItem } from "../components";
 import MapPicker from "../MapPicker";
+import { isManagerOrHigher } from "../utils";
 
 interface WorkplacesPageProps {
   onOpenWorkplace: (workplaceId: number) => void;
@@ -162,7 +163,7 @@ export default function WorkplacesPage({
             {workplaces.length === 1 ? "workplace" : "workplaces"}
           </p>
         </div>
-        {user?.companyRole === "MANAGER" && (
+        {isManagerOrHigher(user?.companyRole) && (
           <div className="page-header-actions">
             <button
               className="btn btn-primary"
@@ -182,7 +183,7 @@ export default function WorkplacesPage({
             title="No workplaces yet."
             description="Create a workplace to start organizing projects."
             actions={
-              user?.companyRole === "MANAGER" ? (
+              isManagerOrHigher(user?.companyRole) ? (
                 <button
                   className="btn btn-primary"
                   onClick={() => setShowCreateWorkplace(true)}
@@ -228,7 +229,7 @@ export default function WorkplacesPage({
                   {wp.location?.city || "No location set"}
                 </div>
               </div>
-              {user?.companyRole === "MANAGER" && (
+              {isManagerOrHigher(user?.companyRole) && (
                 <div
                   onClick={(e) => e.stopPropagation()}
                   style={{ flexShrink: 0 }}

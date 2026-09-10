@@ -5,6 +5,7 @@ import com.example.logis.dtos.requests.CreateTimeEntryRequest;
 import com.example.logis.dtos.requests.StartTimeEntryRequest;
 import com.example.logis.dtos.responses.TimeEntryResponse;
 import com.example.logis.dtos.requests.UpdateTimeEntryRequest;
+import com.example.logis.dtos.responses.TimeWorkedResponse;
 import com.example.logis.services.TimeTrackingService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -83,5 +84,43 @@ public class TimeTrackingController {
             Authentication authentication){
         User user = (User) authentication.getPrincipal();
         return timeTrackingService.getUserTimeEntries(user.getId(), user.getId(), from, to);
+    }
+
+    @GetMapping("/me/time-worked")
+    public List<TimeWorkedResponse> getMyTimeWorked(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            Authentication authentication) {
+
+        Long userId = ((User) authentication.getPrincipal()).getId();
+
+        return timeTrackingService.getUserTimeWorked(userId, userId, from, to);
+    }
+
+    @GetMapping("/time-worked/{userId}")
+    public List<TimeWorkedResponse> getUserTimeWorked(
+            @PathVariable long userId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            Authentication authentication) {
+
+        Long requesterId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.getUserTimeWorked(userId, requesterId, from, to);
+    }
+
+    @GetMapping("/projects/{projectId}/time-worked")
+    public List<TimeWorkedResponse> getTimeWorkedForProject(@PathVariable long projectId, Authentication authentication) {
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.getProjectTimeWorked(projectId, userId);
+    }
+
+    @GetMapping("/workplaces/{workplaceId}/time-worked")
+    public List<TimeWorkedResponse> getTimeWorkedForWorkplace(@PathVariable long workplaceId, Authentication authentication) {
+        Long userId = ((User) authentication.getPrincipal()).getId();
+        return timeTrackingService.getWorkplaceTimeWorked(workplaceId, userId);
     }
 }

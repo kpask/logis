@@ -226,7 +226,6 @@ class ProjectServiceTest {
         Project project = project(30L, workplace(20L, company));
         when(userService.findUser(1L)).thenReturn(requester);
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project));
-        when(companyService.findCompany(10L)).thenReturn(company);
         when(projectRepository.save(project)).thenReturn(project);
 
         ProjectResponse response = projectService.updateProjectStatus(30L, ProjectStatus.ACTIVE, 1L);
@@ -240,27 +239,26 @@ class ProjectServiceTest {
         Company company = company(10L);
         User requester = member(1L, company);
         Project project = project(30L, workplace(20L, company));
+        project.setProjectStatus(ProjectStatus.PENDING);
         when(userService.findUser(1L)).thenReturn(requester);
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project));
-        when(companyService.findCompany(10L)).thenReturn(company);
 
         assertThatThrownBy(() -> projectService.updateProjectStatus(30L, ProjectStatus.ACTIVE, 1L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("not a manager");
 
-        assertThat(project.getProjectStatus()).isNotEqualTo(ProjectStatus.ACTIVE);
+        assertThat(project.getProjectStatus()).isEqualTo(ProjectStatus.PENDING);
     }
 
     @Test
-    void updateProjectStatus_throwsResourceNotOwned_whenProjectBelongsToAnotherCompany() {
+    void updateProjectStatus_throwsForbidden_whenProjectBelongsToAnotherCompany() {
         User requester = manager(1L, company(10L));
         Project project = project(30L, workplace(20L, company(99L)));
         when(userService.findUser(1L)).thenReturn(requester);
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project));
-        when(companyService.findCompany(10L)).thenReturn(requester.getCompany());
 
         assertThatThrownBy(() -> projectService.updateProjectStatus(30L, ProjectStatus.ACTIVE, 1L))
-                .isInstanceOf(ResourceNotOwnedException.class);
+                .isInstanceOf(ForbiddenActionException.class);
     }
 
     // ── assignWorker ────────────────────────────────────────────────────

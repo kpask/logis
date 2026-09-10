@@ -1,5 +1,6 @@
 package com.example.logis.dtos.requests;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -9,6 +10,7 @@ public record CreateProjectRequest(
         @NotBlank(message = "Project name is required")
         @Size(max = 100, message = "Project name must be at most 100 characters")
         String projectName,
+        @Min(value = 1, message = "Workplace ID is required")
         Long workplaceId,
         LocalDate startDate,
         LocalDate deadline

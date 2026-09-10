@@ -1,9 +1,13 @@
 package com.example.logis.services;
 
 import com.example.logis.data.entities.User;
+import com.example.logis.dtos.requests.UpdateUserRequest;
 import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.exceptions.UserNotFoundException;
+import com.example.logis.exceptions.UsernameAlreadyExistsException;
 import com.example.logis.repository.UserRepository;
+import com.example.logis.util.AuthorizationHelper;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,8 +47,7 @@ public class UserService {
     public UserResponse getUserByIdAndUser(Long id, Long requesterId){
         User requester = findUser(requesterId);
         User target = findUser(id);
-        if (requester.getCompany() == null || target.getCompany() == null
-                || !requester.getCompany().getId().equals(target.getCompany().getId())) {
+        if (!AuthorizationHelper.areUsersPartOfSameCompany(requester, target)) {
             throw new IllegalArgumentException("User is not in the same company as the requested user");
         }
         return toResponse(target);
@@ -64,5 +67,18 @@ public class UserService {
                 user.getRole(),
                 user.getCompany() != null ? user.getCompany().getId() : null
         );
+    }
+
+    @Transactional
+    public UserResponse updateUser(Long requesterId, UpdateUserRequest request) {
+        User user = findUser(requesterId);
+        user.setName(request.name() != null ? request.name() : user.getName());
+
+        if(request.username() != null && userRepository.existsByUsername(request.username())){
+            throw new UsernameAlreadyExistsException(request.username());
+        }
+
+        user.setUsername(request.username() != null ? request.username() : user.getUsername());
+        return toResponse(userRepository.save(user));
     }
 }

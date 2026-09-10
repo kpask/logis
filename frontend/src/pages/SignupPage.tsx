@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "../auth";
 import { getErrorMessage } from "../api";
 import { Alert } from "../components";
+import { useI18n } from "../i18n";
 
 export default function SignupPage({
   onNavigateLogin,
@@ -9,6 +10,7 @@ export default function SignupPage({
   onNavigateLogin: () => void;
 }) {
   const { register } = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [lastname, setLastname] = useState("");
   const [username, setUsername] = useState("");
@@ -19,14 +21,13 @@ export default function SignupPage({
   const [submitting, setSubmitting] = useState(false);
 
   function validate(): string | null {
-    if (!name.trim()) return "Name is required.";
-    if (!lastname.trim()) return "Last name is required.";
-    if (username.trim().length < 3)
-      return "Username must be at least 3 characters.";
+    if (!name.trim()) return t("signupErrorNameRequired");
+    if (!lastname.trim()) return t("signupErrorLastNameRequired");
+    if (username.trim().length < 3) return t("signupErrorUsernameShort");
     if (!email.trim() || !email.includes("@"))
-      return "Please enter a valid email.";
-    if (password.length < 8) return "Password must be at least 8 characters.";
-    if (password !== confirmPassword) return "Passwords do not match.";
+      return t("signupErrorEmailInvalid");
+    if (password.length < 8) return t("signupErrorPasswordShort");
+    if (password !== confirmPassword) return t("signupErrorPasswordMatch");
     return null;
   }
 
@@ -60,12 +61,12 @@ export default function SignupPage({
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-         <div className="auth-logo-icon">L</div>
-         <div className="auth-logo-text">Logis</div>
+          <div className="auth-logo-icon">L</div>
+          <div className="auth-logo-text">Logis</div>
         </div>
 
-        <h1 className="auth-title">Create your account</h1>
-        <p className="auth-subtitle">Start tracking your work in minutes.</p>
+        <h1 className="auth-title">{t("signupTitle")}</h1>
+        <p className="auth-subtitle">{t("signupSubtitle")}</p>
 
         {error && (
           <div style={{ marginBottom: 16 }}>
@@ -77,7 +78,7 @@ export default function SignupPage({
           <div className="grid-2" style={{ gap: 12 }}>
             <div className="form-group">
               <label className="form-label" htmlFor="name">
-                Name
+                {t("signupName")}
               </label>
               <input
                 id="name"
@@ -93,7 +94,7 @@ export default function SignupPage({
 
             <div className="form-group">
               <label className="form-label" htmlFor="lastname">
-                Last name
+                {t("signupLastName")}
               </label>
               <input
                 id="lastname"
@@ -110,7 +111,7 @@ export default function SignupPage({
 
           <div className="form-group">
             <label className="form-label" htmlFor="username">
-              Username
+              {t("signupUsername")}
             </label>
             <input
               id="username"
@@ -126,7 +127,7 @@ export default function SignupPage({
 
           <div className="form-group">
             <label className="form-label" htmlFor="email">
-              Email
+              {t("signupEmail")}
             </label>
             <input
               id="email"
@@ -142,13 +143,13 @@ export default function SignupPage({
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">
-              Password
+              {t("signupPassword")}
             </label>
             <input
               id="password"
               type="password"
               className="form-input"
-              placeholder="At least 8 characters"
+              placeholder={t("signupPasswordPlaceholder")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
@@ -158,13 +159,13 @@ export default function SignupPage({
 
           <div className="form-group">
             <label className="form-label" htmlFor="confirm-password">
-              Confirm password
+              {t("signupConfirmPassword")}
             </label>
             <input
               id="confirm-password"
               type="password"
               className="form-input"
-              placeholder="Repeat your password"
+              placeholder={t("signupConfirmPasswordPlaceholder")}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               autoComplete="new-password"
@@ -177,12 +178,12 @@ export default function SignupPage({
             className="btn btn-primary btn-lg btn-block"
             disabled={submitting}
           >
-            {submitting ? "Creating account…" : "Sign up"}
+            {submitting ? t("signupSubmitting") : t("signupSubmit")}
           </button>
         </form>
 
         <div className="auth-footer">
-          Already have an account?{" "}
+          {t("signupHasAccount")}{" "}
           <a
             href="#"
             onClick={(e) => {
@@ -190,7 +191,7 @@ export default function SignupPage({
               onNavigateLogin();
             }}
           >
-            Sign in
+            {t("signupSignIn")}
           </a>
         </div>
       </div>

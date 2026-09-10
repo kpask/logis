@@ -7,6 +7,7 @@ import com.example.logis.dtos.requests.CreateTimeEntryRequest;
 import com.example.logis.dtos.requests.StartTimeEntryRequest;
 import com.example.logis.dtos.responses.TimeEntryResponse;
 import com.example.logis.dtos.requests.UpdateTimeEntryRequest;
+import com.example.logis.dtos.responses.TimeWorkedResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.TimeEntryNotFoundException;
 import com.example.logis.repository.TimeTrackingRepository;
@@ -14,8 +15,11 @@ import com.example.logis.util.AuthorizationHelper;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.*;
 
 @Service
 public class TimeTrackingService {
@@ -23,12 +27,14 @@ public class TimeTrackingService {
     private final ProjectService projectService;
     private final WorkplaceService workplaceService;
     private final UserService userService;
+    private final CompanySettingsService companySettingsService;
 
-    public TimeTrackingService(TimeTrackingRepository timeTrackingRepository, ProjectService projectService, WorkplaceService workplaceService, UserService userService){
+    public TimeTrackingService(TimeTrackingRepository timeTrackingRepository, ProjectService projectService, WorkplaceService workplaceService, UserService userService, CompanySettingsService companySettingsService){
         this.timeTrackingRepository = timeTrackingRepository;
         this.projectService = projectService;
         this.workplaceService = workplaceService;
         this.userService = userService;
+        this.companySettingsService = companySettingsService;
     }
 
     @Transactional
@@ -63,7 +69,8 @@ public class TimeTrackingService {
             }
         }
 
-        TimeEntry savedTimeEntry = timeTrackingRepository.save(new TimeEntry(projectWorker, inside ? TimeEntryLogStatus.LOGGED : TimeEntryLogStatus.LOGGED_OUTSIDE));
+        TimeEntryLogStatus status = inside ? TimeEntryLogStatus.LOGGED : TimeEntryLogStatus.LOGGED_OUTSIDE;
+        TimeEntry savedTimeEntry = timeTrackingRepository.save(new TimeEntry(projectWorker, status));
         return toResponse(savedTimeEntry);
     }
 
@@ -73,7 +80,7 @@ public class TimeTrackingService {
         TimeEntry timeEntry = timeTrackingRepository.findById(id)
                 .orElseThrow(() -> new TimeEntryNotFoundException(id));
 
-        if(!timeEntry.getProjectWorker().getWorker().getId().equals(user.getId()) && !AuthorizationHelper.isManagerOfCompany(user, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
+        if(!timeEntry.getProjectWorker().getWorker().getId().equals(user.getId()) && !AuthorizationHelper.isManagerOrHigherOfCompany(user, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("Only the worker who started this timer can stop it");
         }
 
@@ -91,8 +98,8 @@ public class TimeTrackingService {
         User user = userService.findUser(userId);
         User requester = userService.findUser(requesterUserId);
         boolean isSelf = user.getId().equals(requester.getId());
-        boolean requesterIsManager = requester.getRole().equals(CompanyRole.MANAGER);
-        if (!isSelf && !requesterIsManager) {
+
+        if (!isSelf && !AuthorizationHelper.isManagerOrHigherOfCompany(requester, user.getCompany())) {
             throw new ForbiddenActionException("You are not authorized to view others work time");
         }
         if (requester.getCompany() == null) {
@@ -110,24 +117,9 @@ public class TimeTrackingService {
                 .toList();
     }
 
-    private TimeEntryResponse toResponse(TimeEntry t) {
-        return new TimeEntryResponse(
-                t.getId(),
-                t.getProjectWorker().getId(),
-                t.getProjectWorker().getWorker().getId(),
-                t.getProjectWorker().getProject().getId(),
-                t.getStartTime(),
-                t.getEndTime(),
-                t.getDuration().toSeconds(),
-                t.getLunchLength() == null ? 0L : t.getLunchLength(),
-                t.getStatus()
-        );
-    }
-
     private boolean inRange(TimeEntry t, Instant from, Instant to) {
         if(from != null && t.getStartTime().isBefore(from)) return false;
-        if(to != null && t.getStartTime().isAfter(to)) return false;
-        return true;
+        return to == null || !t.getStartTime().isAfter(to);
     }
 
     @Transactional
@@ -138,14 +130,14 @@ public class TimeTrackingService {
         boolean isProjectWorker = projectService.findProjectWorker(projectId, requester.getId()).isPresent()
                 && projectService.findProjectWorker(projectId, requester.getId()).get().getEndDate() == null;
 
-        if(!isProjectWorker && requester.getRole().equals(CompanyRole.USER)){
+        if(!isProjectWorker && !AuthorizationHelper.isManagerOrHigherOfCompany(requester, requester.getCompany())) {
             throw new ForbiddenActionException("You are not authorized to view time entries for this project.");
         }
 
         if(!project.getWorkplace().getCompany().getUsers().contains(requester)){
             throw new ForbiddenActionException("This project is not part of your company.");
         }
-        if(requester.getRole().equals(CompanyRole.MANAGER)){
+        if(!requester.getRole().equals(CompanyRole.USER)){
             return getAllByProjectId(projectId);
         } else{
             return getAllByUserIdAndProjectId(requester.getId(), projectId);
@@ -159,9 +151,25 @@ public class TimeTrackingService {
 
     @Transactional
     public List<TimeEntryResponse> getAllByProjectId(long projectId) {
-        Project project = projectService.findProject(projectId);
         return timeTrackingRepository.findAllByProjectId(projectId).stream()
                 .map((this::toResponse)).toList();
+    }
+
+    @Transactional
+    public List<TimeEntry> findAllByProjectId(long projectId) {
+        return timeTrackingRepository.findAllByProjectId(projectId);
+    }
+
+    public List<TimeEntry> findAllByUserIdAndProjectId(long userId, long projectId) {
+        return timeTrackingRepository.findAllByWorkerIdAndProjectId(userId, projectId);
+    }
+
+    public List<TimeEntry> findAllByWorkplaceId(long workplaceId) {
+        return timeTrackingRepository.findAllByWorkplaceId(workplaceId);
+    }
+
+    public List<TimeEntry> findAllByWorkplaceIdAndUserid(long workplaceId, long userId){
+        return timeTrackingRepository.findAllByWorkplaceIdAndWorkerId(workplaceId, userId);
     }
 
     @Transactional(readOnly = true)
@@ -172,7 +180,7 @@ public class TimeTrackingService {
             throw new ForbiddenActionException("You are not a member of this company.");
         }
 
-        if (requester.getRole().equals(CompanyRole.MANAGER) && workplace.getCompany().getManagers().contains(requester)) {
+        if (AuthorizationHelper.isManagerOrHigherOfCompany(requester, workplace.getCompany())) {
             return timeTrackingRepository.findAllByWorkplaceId(workplaceId)
                     .stream().map(this::toResponse).toList();
         }
@@ -187,7 +195,7 @@ public class TimeTrackingService {
         ProjectWorker projectWorker = projectService.findProjectWorker(projectId, request.workerId())
                 .orElseThrow(() -> new ForbiddenActionException("User " + request.workerId() + " is not on project " + projectId));
 
-        if(!AuthorizationHelper.isManagerOfCompany(user, projectWorker.getProject().getWorkplace().getCompany())){
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(user, projectWorker.getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to create time entries for this project.");
         }
         if(projectWorker.getEndDate() != null){
@@ -197,18 +205,12 @@ public class TimeTrackingService {
             throw new IllegalArgumentException("End time must be after start time");
         }
 
-        long lunchLength = request.lunchLength() != null ? request.lunchLength() : 30L;
-        if (lunchLength < 0) {
-            throw new IllegalArgumentException("Lunch length cannot be negative");
-        }
-
         TimeEntry timeEntry = new TimeEntry(
                 projectWorker,
                 request.startTime(),
                 request.endTime(),
                 TimeEntryLogStatus.MANUAL_ENTRY
         );
-        timeEntry.setLunchLength(lunchLength);
 
         TimeEntry savedTimeEntry = timeTrackingRepository.save(timeEntry);
         return toResponse(savedTimeEntry);
@@ -217,10 +219,9 @@ public class TimeTrackingService {
     @Transactional
     public TimeEntryResponse updateTimeEntry(long timeEntryId, UpdateTimeEntryRequest request, Long requesterId){
         User requester = userService.findUser(requesterId);
-        TimeEntry timeEntry = timeTrackingRepository.findById(timeEntryId)
-                .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
+        TimeEntry timeEntry = findTimeEntry(timeEntryId);
 
-        if(!AuthorizationHelper.isManagerOfCompany(requester, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(requester, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to update this time entry.");
         }
 
@@ -231,14 +232,8 @@ public class TimeTrackingService {
             throw new IllegalArgumentException("End time must be after start time");
         }
 
-        long lunchLength = request.lunchLength() != null ? request.lunchLength() : timeEntry.getLunchLength() != null ? timeEntry.getLunchLength() : 30L;
-        if (lunchLength < 0) {
-            throw new IllegalArgumentException("Lunch length cannot be negative");
-        }
-
         timeEntry.setStartTime(request.startTime());
         timeEntry.setEndTime(request.endTime());
-        timeEntry.setLunchLength(lunchLength);
         if(!timeEntry.getStatus().equals(TimeEntryLogStatus.MANUAL_ENTRY)){
             timeEntry.setStatus(TimeEntryLogStatus.EDITED);
         }
@@ -251,7 +246,7 @@ public class TimeTrackingService {
         TimeEntry timeEntry = timeTrackingRepository.findById(timeEntryId)
                 .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
 
-        if(!AuthorizationHelper.isManagerOfCompany(requester, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
+        if(!AuthorizationHelper.isManagerOrHigherOfCompany(requester, timeEntry.getProjectWorker().getProject().getWorkplace().getCompany())){
             throw new ForbiddenActionException("User " + requester.getId() + " is not authorized to delete this time entry.");
         }
 
@@ -262,6 +257,116 @@ public class TimeTrackingService {
         timeTrackingRepository.delete(timeEntry);
     }
 
+    public TimeEntry findTimeEntry(long timeEntryId){
+        return timeTrackingRepository.findById(timeEntryId)
+                .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<TimeWorkedResponse> getUserTimeWorked(long userId, long requesterId, Instant from, Instant to) {
+        User user = userService.findUser(userId);
+        User requester = userService.findUser(requesterId);
+
+        if(!user.getId().equals(requester.getId()) && !AuthorizationHelper.isManagerOrHigherOfCompany(requester, user.getCompany())){
+            throw new ForbiddenActionException("You are not authorized to view this users work time.");
+        }
+        if (!AuthorizationHelper.areUsersPartOfSameCompany(user, requester)) {
+            throw new ForbiddenActionException("You are not authorized to view this users work time");
+        }
+
+        List<TimeEntry> entries = timeTrackingRepository
+                .findAllByWorkerId(userId)
+                .stream()
+                .filter(t -> inRange(t, from, to))
+                .toList();
+
+        return calculateTimeWorkedForUsers(entries);
+    }
+
+    @Transactional
+    public List<TimeWorkedResponse> getWorkplaceTimeWorked(long workplaceId, Long userId) {
+        Workplace workplace = workplaceService.findWorkplace(workplaceId);
+        User user = userService.findUser(userId);
+        List<TimeEntry> timeEntries;
+
+        if(!AuthorizationHelper.isWorkplaceOwnedByCompany(workplace, user.getCompany())){
+            throw new ForbiddenActionException("This workplace doesn't belong to your company");
+        }
+
+        if(AuthorizationHelper.isManagerOrHigherOfCompany(user, user.getCompany())){
+            timeEntries = findAllByWorkplaceId(workplaceId);
+        }
+        else{
+            timeEntries = findAllByWorkplaceIdAndUserid(workplaceId, userId);
+        }
+        return calculateTimeWorkedForUsers(timeEntries);
+    }
+
+    @Transactional
+    public List<TimeWorkedResponse> getProjectTimeWorked(long projectId, Long userId) {
+        User user = userService.findUser(userId);
+        Project project = projectService.findProject(projectId);
+        List<TimeEntry> timeEntries;
+
+        if(!AuthorizationHelper.isUserPartOfCompany(user, project.getWorkplace().getCompany())){
+            throw new ForbiddenActionException("This project doesn't belong to your company.");
+        }
+
+        if(AuthorizationHelper.isManagerOrHigherOfCompany(user, project.getWorkplace().getCompany())){
+            timeEntries = findAllByProjectId(projectId);
+        }
+        else{
+            timeEntries = findAllByUserIdAndProjectId(userId, projectId);
+        }
+
+        return calculateTimeWorkedForUsers(timeEntries);
+    }
+
+    private List<TimeWorkedResponse> calculateTimeWorkedForUsers(List<TimeEntry> entries) {
+        Map<Long, List<TimeEntry>> entriesByUser = new HashMap<>();
+
+        for (TimeEntry entry : entries) {
+            Long userId = entry.getProjectWorker().getWorker().getId();
+            entriesByUser.computeIfAbsent(userId, id -> new ArrayList<>()).add(entry);
+        }
+
+        List<TimeWorkedResponse> result = new ArrayList<>();
+
+        for (var entry : entriesByUser.entrySet()) {
+            long userId = entry.getKey();
+            long lunchLength = companySettingsService.getSettingsByUser(userId).defaultLunchLength();
+            result.addAll(calculateTimeWorkedForUser(entry.getValue(), lunchLength, userId));
+        }
+
+        return result;
+    }
+
+    private List<TimeWorkedResponse> calculateTimeWorkedForUser(List<TimeEntry> entries, long lunchLength, Long userId) {
+        ZoneId zone = ZoneId.of("Europe/Vilnius");
+        entries.sort(Comparator.comparing(TimeEntry::getStartTime));
+
+        List<TimeWorkedResponse> result = new ArrayList<>();
+        LocalDate currentDate = null;
+        Duration tracked = Duration.ZERO;
+
+        for (TimeEntry entry : entries) {
+            LocalDate date = entry.getStartTime().atZone(zone).toLocalDate();
+
+            if (currentDate != null && !date.equals(currentDate)) {
+                result.add(createResponse(currentDate, tracked, lunchLength, userId));
+                tracked = Duration.ZERO;
+            }
+
+            currentDate = date;
+            tracked = tracked.plus(entry.getDuration());
+        }
+
+        if (currentDate != null) {
+            result.add(createResponse(currentDate, tracked, lunchLength, userId));
+        }
+
+        return result;
+    }
     public static double distanceMeters(double lat1, double lon1, double lat2, double lon2) {
         double earthRadius = 6371000; // meters
         double dLat = Math.toRadians(lat2 - lat1);
@@ -270,5 +375,27 @@ public class TimeTrackingService {
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.pow(Math.sin(dLon / 2), 2);
         return 2 * earthRadius * Math.asin(Math.sqrt(a));
+    }
+
+    private TimeWorkedResponse createResponse(LocalDate date, Duration tracked, long lunchLength, Long userId) {
+        return new TimeWorkedResponse(
+                userId,
+                date,
+                tracked,
+                tracked.compareTo(Duration.ofMinutes(lunchLength)) > 0 ? tracked.minusMinutes(lunchLength) : tracked
+        );
+    }
+
+    private TimeEntryResponse toResponse(TimeEntry t) {
+        return new TimeEntryResponse(
+                t.getId(),
+                t.getProjectWorker().getId(),
+                t.getProjectWorker().getWorker().getId(),
+                t.getProjectWorker().getProject().getId(),
+                t.getStartTime(),
+                t.getEndTime(),
+                t.getDuration().toSeconds(),
+                t.getStatus()
+        );
     }
 }

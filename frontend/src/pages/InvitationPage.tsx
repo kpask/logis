@@ -4,23 +4,13 @@ import { getErrorMessage, invitationsApi, isApiError } from "../api";
 import type { InvitationResponse } from "../types";
 import { Alert, LoadingState } from "../components";
 import { parseDate } from "../utils";
+import { useI18n } from "../i18n";
 
 interface InvitationPageProps {
   token: string;
-  /** Navigate to the normal sign-in page (existing users accept the invite from the Invites tab). */
   onGoToLogin: () => void;
 }
 
-/**
- * Landing page for company invitations (/invitations/:token).
- *
- * - Fetches invitation info from GET /invites/{token}
- * - When the invited user does NOT exist yet: shows a registration form
- *   (email is pre-filled from the invitation and not editable).
- * - When the user DOES exist: points them to the normal sign-in page —
- *   they accept the invitation afterwards from the Invites tab.
- * - Handles expired / already-used / not-found / network-error states cleanly.
- */
 type LoadErrorType = "not-found" | "network" | "other";
 
 export default function InvitationPage({
@@ -28,6 +18,7 @@ export default function InvitationPage({
   onGoToLogin,
 }: InvitationPageProps) {
   const { registerWithInvitation } = useAuth();
+  const { t } = useI18n();
 
   const [invitation, setInvitation] = useState<InvitationResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,7 +26,6 @@ export default function InvitationPage({
   const [loadErrorDetail, setLoadErrorDetail] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  // Registration form state
   const [name, setName] = useState("");
   const [lastname, setLastname] = useState("");
   const [username, setUsername] = useState("");
@@ -53,9 +43,6 @@ export default function InvitationPage({
       const data = await invitationsApi.get(token);
       setInvitation(data);
 
-      // Proactive expiry check (defence-in-depth): the backend may return
-      // status=PENDING for an invitation whose expiresAt has already passed,
-      // so we treat a past expiry as expired here too.
       const expiresAt = parseDate(data.expiresAt);
       const isExpired = expiresAt !== null && expiresAt.getTime() < Date.now();
 
@@ -96,12 +83,11 @@ export default function InvitationPage({
   }, [loadInvitation]);
 
   function validate(): string | null {
-    if (!name.trim()) return "Name is required.";
-    if (!lastname.trim()) return "Last name is required.";
-    if (username.trim().length < 3)
-      return "Username must be at least 3 characters.";
-    if (password.length < 8) return "Password must be at least 8 characters.";
-    if (password !== confirmPassword) return "Passwords do not match.";
+    if (!name.trim()) return t("signupErrorNameRequired");
+    if (!lastname.trim()) return t("signupErrorLastNameRequired");
+    if (username.trim().length < 3) return t("signupErrorUsernameShort");
+    if (password.length < 8) return t("signupErrorPasswordShort");
+    if (password !== confirmPassword) return t("signupErrorPasswordMatch");
     return null;
   }
 
@@ -124,7 +110,6 @@ export default function InvitationPage({
         password,
         token,
       });
-      // On success, the auth context sets the user and App renders the dashboard.
     } catch (err) {
       setFormError(getErrorMessage(err));
     } finally {
@@ -133,82 +118,65 @@ export default function InvitationPage({
   }
 
   if (loading) {
-    return <LoadingState label="Loading invitation…" />;
+    return <LoadingState label={t("loadingInvitation")} />;
   }
 
   return (
     <div className="auth-page">
       <div className="auth-card auth-card--invitation">
         <div className="auth-logo">
-         <div className="auth-logo-icon">L</div>
-         <div className="auth-logo-text">Logis</div>
+          <div className="auth-logo-icon">L</div>
+          <div className="auth-logo-text">Logis</div>
         </div>
 
         {loadError === "not-found" ? (
           <>
-            <h1 className="auth-title">This invitation could not be found.</h1>
-            <p className="auth-subtitle">
-              The link may be incorrect or the invitation has been removed. Ask
-              a company manager to send you a new invitation.
-            </p>
+            <h1 className="auth-title">{t("invitationNotFoundTitle")}</h1>
+            <p className="auth-subtitle">{t("invitationNotFoundDesc")}</p>
           </>
         ) : loadError === "network" ? (
           <>
-            <h1 className="auth-title">Unable to load the invitation.</h1>
-            <p className="auth-subtitle">
-              Could not reach the server. Please check your internet connection
-              and try again.
-            </p>
+            <h1 className="auth-title">{t("invitationNetworkErrorTitle")}</h1>
+            <p className="auth-subtitle">{t("invitationNetworkErrorDesc")}</p>
           </>
         ) : loadError === "other" ? (
           <>
-            <h1 className="auth-title">Something went wrong.</h1>
+            <h1 className="auth-title">{t("invitationGenericErrorTitle")}</h1>
             <p className="auth-subtitle">
-              {loadErrorDetail ||
-                "An unexpected error occurred while loading the invitation. Please try again."}
+              {loadErrorDetail || t("invitationGenericErrorTitle")}
             </p>
           </>
         ) : statusMessage === "expired" ? (
           <>
-            <h1 className="auth-title">This invitation has expired.</h1>
-            <p className="auth-subtitle">
-              Ask a company manager to send you a new invitation.
-            </p>
+            <h1 className="auth-title">{t("invitationExpiredTitle")}</h1>
+            <p className="auth-subtitle">{t("invitationExpiredDesc")}</p>
           </>
         ) : statusMessage === "accepted" ? (
           <>
-            <h1 className="auth-title">
-              This invitation has already been used.
-            </h1>
-            <p className="auth-subtitle">
-              Ask a company manager to send you a new invitation if you believe
-              this is a mistake.
-            </p>
+            <h1 className="auth-title">{t("invitationUsedTitle")}</h1>
+            <p className="auth-subtitle">{t("invitationUsedDesc")}</p>
           </>
         ) : statusMessage === "unavailable" ? (
           <>
-            <h1 className="auth-title">This invitation is no longer valid.</h1>
-            <p className="auth-subtitle">
-              Ask a company manager to send you a new invitation.
-            </p>
+            <h1 className="auth-title">{t("invitationUnavailableTitle")}</h1>
+            <p className="auth-subtitle">{t("invitationUnavailableDesc")}</p>
           </>
         ) : invitation && !invitation.userExists ? (
-          // ── New user: invitation registration form ────
           <>
             <div className="company-badge">
               <span className="company-badge-icon">🏢</span>
               {invitation.companyName}
             </div>
             <h1 className="auth-title">
-              You've been invited to join {invitation.companyName}
+              {t("invitationNewUserTitle", { company: invitation.companyName })}
             </h1>
             <p className="auth-subtitle">
-              This invitation was sent to:
-              <br />
-              <strong>{invitation.email}</strong>
+              {t("invitationNewUserSentTo", { email: invitation.email })}
             </p>
             <p className="auth-subtitle">
-             Create your Logis account to join {invitation.companyName}.
+              {t("invitationNewUserCreateAccount", {
+                company: invitation.companyName,
+              })}
             </p>
 
             {formError && (
@@ -221,7 +189,7 @@ export default function InvitationPage({
               <div className="grid-2" style={{ gap: 12 }}>
                 <div className="form-group">
                   <label className="form-label" htmlFor="inv-name">
-                    Name
+                    {t("signupName")}
                   </label>
                   <input
                     id="inv-name"
@@ -236,7 +204,7 @@ export default function InvitationPage({
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="inv-lastname">
-                    Last name
+                    {t("signupLastName")}
                   </label>
                   <input
                     id="inv-lastname"
@@ -253,7 +221,7 @@ export default function InvitationPage({
 
               <div className="form-group">
                 <label className="form-label" htmlFor="inv-username">
-                  Username
+                  {t("signupUsername")}
                 </label>
                 <input
                   id="inv-username"
@@ -269,7 +237,7 @@ export default function InvitationPage({
 
               <div className="form-group">
                 <label className="form-label" htmlFor="inv-email">
-                  Email
+                  {t("signupEmail")}
                 </label>
                 <input
                   id="inv-email"
@@ -282,13 +250,13 @@ export default function InvitationPage({
 
               <div className="form-group">
                 <label className="form-label" htmlFor="inv-password">
-                  Password
+                  {t("signupPassword")}
                 </label>
                 <input
                   id="inv-password"
                   type="password"
                   className="form-input"
-                  placeholder="At least 8 characters"
+                  placeholder={t("signupPasswordPlaceholder")}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
@@ -298,13 +266,13 @@ export default function InvitationPage({
 
               <div className="form-group">
                 <label className="form-label" htmlFor="inv-confirm-password">
-                  Confirm password
+                  {t("signupConfirmPassword")}
                 </label>
                 <input
                   id="inv-confirm-password"
                   type="password"
                   className="form-input"
-                  placeholder="Repeat your password"
+                  placeholder={t("signupConfirmPasswordPlaceholder")}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"
@@ -317,35 +285,32 @@ export default function InvitationPage({
                 className="btn btn-primary btn-lg btn-block"
                 disabled={submitting}
               >
-                {submitting ? "Creating account…" : "Create account"}
+                {submitting
+                  ? t("invitationNewUserSubmitting")
+                  : t("invitationNewUserSubmit")}
               </button>
             </form>
           </>
         ) : (
-          // ── Existing Logis user: go sign in, accept via Invites tab ────
           <>
             <div className="company-badge">
               <span className="company-badge-icon">🏢</span>
               {invitation!.companyName}
             </div>
             <h1 className="auth-title">
-              You've been invited to join {invitation!.companyName}
+              {t("invitationExistingUserTitle", {
+                company: invitation!.companyName,
+              })}
             </h1>
             <p className="auth-subtitle">
-              This invitation was sent to:
-              <br />
-              <strong>{invitation!.email}</strong>
+              {t("invitationNewUserSentTo", { email: invitation!.email })}
             </p>
-            <p className="auth-subtitle">You already have a Logis account.</p>
-            <p className="auth-subtitle">
-              Sign in with your account — you can accept this invitation from
-              the <strong>Invites</strong> tab afterwards.
-            </p>
+            <p className="auth-subtitle">{t("invitationExistingUserDesc")}</p>
             <button
               className="btn btn-primary btn-lg btn-block"
               onClick={onGoToLogin}
             >
-              Go to sign in
+              {t("invitationGoToSignIn")}
             </button>
           </>
         )}

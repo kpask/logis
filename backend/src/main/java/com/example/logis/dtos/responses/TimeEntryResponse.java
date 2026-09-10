@@ -12,6 +12,5 @@ public record TimeEntryResponse(
         Instant startTime,
         Instant endTime,
         long duration,
-        long lunchLength,
         TimeEntryLogStatus status
 ) {}

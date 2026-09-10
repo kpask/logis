@@ -6,6 +6,7 @@
 import type {
   ApiError,
   CompanyResponse,
+  CompanySettingsResponse,
   CreateCompanyRequest,
   CreateInvitedUserRequest,
   CreateTimeEntryRequest,
@@ -20,10 +21,15 @@ import type {
   ProjectStatus,
   StartTimeEntryRequest,
   TimeEntryResponse,
+  TimeWorkedResponse,
+  UpdateCompanyRequest,
+  UpdateCompanySettingsRequest,
   UpdateTimeEntryRequest,
+  UpdateUserSettingsRequest,
   UpdateWorkplaceRequest,
   UpdateProjectRequest,
   UserResponse,
+  UserSettingsResponse,
   WorkplaceResponse,
 } from "./types";
 
@@ -141,6 +147,17 @@ export const usersApi = {
   get: (id: number) => request<UserResponse>("GET", `/user/${id}`),
 };
 
+// ── User settings ────────────────────────────────────────────
+
+export const userSettingsApi = {
+  /** Fetch the current user's settings (creates defaults on first call). */
+  get: () => request<UserSettingsResponse>("GET", "/me/settings"),
+
+  /** Update the current user's settings. */
+  update: (req: UpdateUserSettingsRequest) =>
+    request<UserSettingsResponse>("PUT", "/me/settings", req),
+};
+
 // ── Companies ────────────────────────────────────────────────
 
 export const companiesApi = {
@@ -149,22 +166,36 @@ export const companiesApi = {
 
   get: (_companyId?: number) => request<CompanyResponse>("GET", "/company/"),
 
+  /** Edit the company name (owner only). */
+  edit: (req: UpdateCompanyRequest) =>
+    request<CompanyResponse>("PUT", "/company/", req),
+
+  /** Fetch the company settings (any member). */
+  getSettings: () =>
+    request<CompanySettingsResponse>("GET", "/company/settings"),
+
+  /** Update the company settings (manager+). */
+  updateSettings: (req: UpdateCompanySettingsRequest) =>
+    request<CompanySettingsResponse>("PUT", "/company/settings", req),
+
   getMembers: (_companyId?: number) =>
     request<UserResponse[]>("GET", "/company/members"),
 
-  /** Promote a company member to manager (managers only). */
+  /** Promote a company member to manager (owner only). */
   promote: (userId: number) =>
     request<void>("POST", `/company/manager/${userId}`),
 
-  /** Remove a member from the company (managers only). */
+  /** Demote a manager back to a regular worker (owner only). */
+  demote: (userId: number) =>
+    request<void>("DELETE", `/company/manager/${userId}`),
+
+  /** Remove a member from the company (owner only). */
   kick: (userId: number) => request<void>("POST", `/company/kick/${userId}`),
 
-  /**
-   * Users with project-assignment history at the company who are no longer
-   * members (managers only).
-   */
-  getFormerMembers: () =>
-    request<UserResponse[]>("GET", "/company/former-members"),
+  /** Transfer company ownership to another member (owner only). The
+   *  former owner becomes a manager. */
+  transferOwnership: (userId: number) =>
+    request<void>("PUT", `/owner/${userId}`),
 };
 
 // ── Workplaces ───────────────────────────────────────────────
@@ -303,6 +334,54 @@ export const timeTrackingApi = {
   /** Delete a time entry (managers only). */
   delete: (timeEntryId: number) =>
     request<void>("DELETE", `/time-entries/${timeEntryId}`),
+
+  /**
+   * Per-day worked time for the logged-in user, computed on the backend
+   * (grouped by calendar day, company rules like the lunch deduction
+   * already applied). Optional from/to are ISO instants.
+   */
+  getMyTimeWorked: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const query = qs.toString();
+    return request<TimeWorkedResponse[]>(
+      "GET",
+      `/me/time-worked${query ? `?${query}` : ""}`
+    );
+  },
+
+  /**
+   * Per-day worked time of a company member. Managers may view any member
+   * of their company; regular users only themselves.
+   */
+  getTimeWorkedByUser: (userId: number, from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const query = qs.toString();
+    return request<TimeWorkedResponse[]>(
+      "GET",
+      `/time-worked/${userId}${query ? `?${query}` : ""}`
+    );
+  },
+
+  /**
+   * Per-user, per-day worked time for a project. The backend decides the
+   * scope: managers receive everyone's rows, regular members only their own.
+   */
+  getTimeWorkedByProject: (projectId: number) =>
+    request<TimeWorkedResponse[]>("GET", `/projects/${projectId}/time-worked`),
+
+  /**
+   * Per-user, per-day worked time for a workplace. The backend decides the
+   * scope: managers receive everyone's rows, regular members only their own.
+   */
+  getTimeWorkedByWorkplace: (workplaceId: number) =>
+    request<TimeWorkedResponse[]>(
+      "GET",
+      `/workplaces/${workplaceId}/time-worked`
+    ),
 };
 
 // ── Helpers ──────────────────────────────────────────────────
