@@ -1,5 +1,6 @@
 package com.example.logis.dtos.requests;
 
+import com.example.logis.data.enums.Language;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -23,5 +24,7 @@ public record CreateInvitedUserRequest(
 
         @NotBlank(message = "Invite token is required")
         @Size(min = 36, max = 36, message = "Invite token must be 36 characters long")
-        String token
+        String token,
+
+        Language language
 ) {}

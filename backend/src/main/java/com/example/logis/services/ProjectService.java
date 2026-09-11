@@ -96,7 +96,16 @@ public class ProjectService {
         if(!workplace.getCompany().getUsers().contains(user)){
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view projects of this workplace, because he is not part of the company.");
         }
-        return getWorkplaceProjects(workplaceId);
+
+        if (AuthorizationHelper.isManagerOrHigherOfCompany(user, workplace.getCompany())) {
+            return getWorkplaceProjects(workplaceId);
+        }
+
+        return projectWorkerRepository
+                .findByWorker_IdAndProject_Workplace_IdAndEndDateIsNull(user.getId(), workplaceId)
+                .stream()
+                .map(projectWorker -> toResponse(projectWorker.getProject()))
+                .toList();
     }
 
     @Transactional

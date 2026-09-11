@@ -27,7 +27,9 @@ export function languageToLocale(language: Language): string {
 interface I18nContextValue {
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   language: Language;
-  setLanguage: (lang: Language) => void;
+  /** Switch the UI language. Set persist=false on public pages (login/signup),
+   *  where the settings update request cannot be authenticated yet. */
+  setLanguage: (lang: Language, persist?: boolean) => void;
   ready: boolean;
 }
 
@@ -54,10 +56,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const setLanguage = useCallback((lang: Language) => {
+  const setLanguage = useCallback((lang: Language, persist = true) => {
     setLanguageState(lang);
-    // Persist to backend (fire-and-forget)
-    void userSettingsApi.update({ language: lang });
+    if (persist) {
+      // Persist to backend (fire-and-forget)
+      void userSettingsApi.update({ language: lang });
+    }
   }, []);
 
   const t = useCallback(

@@ -1,13 +1,8 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Location } from "./types";
+import { useI18n } from "./i18n";
 
 interface MapPickerProps {
   value: Location | null;
@@ -20,8 +15,16 @@ interface MapPickerProps {
   radiusMeters?: number | null;
 }
 
+interface AddressSuggestion {
+  lat: number;
+  lon: number;
+  label: string;
+}
+
 const DEFAULT_CENTER: [number, number] = [54.6872, 25.2797]; // Vilnius
 const DEFAULT_ZOOM = 6;
+const SUGGESTION_DEBOUNCE_MS = 300;
+const SUGGESTION_MIN_CHARS = 3;
 
 /**
  * A click-to-pick Leaflet map using OpenStreetMap tiles and the free
@@ -29,21 +32,31 @@ const DEFAULT_ZOOM = 6;
  *
  * - Click anywhere on the map to place the marker.
  * - Drag the marker to move it.
- * - Search for an address to jump to it.
+ * - Type an address for debounced suggestions; pick one to jump to it
+ *   (or press Search to jump to the first match).
  * - Reverse-geocodes the picked point into city/street/address.
+ *
+ * Note: the search row intentionally is NOT a <form> — this component is
+ * often rendered inside another form (e.g. the create-workplace modal) and
+ * nested forms are invalid HTML (the browser drops the inner form tag, so
+ * the search button would submit the outer form instead).
  */
 export default function MapPicker({
   value,
   onChange,
   radiusMeters,
 }: MapPickerProps) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const fenceRef = useRef<L.Circle | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [busy, setBusy] = useState(false);
   const [displayName, setDisplayName] = useState("");
+  const searchSeqRef = useRef(0);
 
   // Initialize the map once.
   useEffect(() => {
@@ -72,6 +85,7 @@ export default function MapPicker({
       markerRef.current = null;
       fenceRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Draw/update the fence circle around the marker.
@@ -123,6 +137,46 @@ export default function MapPicker({
     drawFence();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value?.latitude, value?.longitude]);
+
+  // Debounced address suggestions while typing (Nominatim, no API key).
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < SUGGESTION_MIN_CHARS) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const seq = ++searchSeqRef.current;
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            query
+          )}&limit=5`
+        );
+        const results = (await res.json()) as Array<{
+          lat: string;
+          lon: string;
+          display_name: string;
+        }>;
+        // Ignore stale responses after a newer keystroke.
+        if (seq !== searchSeqRef.current) return;
+        setSuggestions(
+          (results || []).map((r) => ({
+            lat: parseFloat(r.lat),
+            lon: parseFloat(r.lon),
+            label: r.display_name,
+          }))
+        );
+        setShowSuggestions(true);
+      } catch {
+        // ignore suggestion errors
+      }
+    }, SUGGESTION_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   function placeMarker(lat: number, lng: number, reverse: boolean) {
     if (!mapRef.current) return;
@@ -195,15 +249,27 @@ export default function MapPicker({
     }
   }
 
-  async function handleSearch(e: FormEvent) {
-    e.preventDefault();
-    if (!searchQuery.trim() || !mapRef.current) return;
+  function pickSuggestion(suggestion: AddressSuggestion) {
+    setShowSuggestions(false);
+    setSearchQuery(suggestion.label);
+    placeMarker(suggestion.lat, suggestion.lon, true);
+  }
+
+  async function handleSearch() {
+    const query = searchQuery.trim();
+    if (!query || !mapRef.current) return;
+
+    // If suggestions are already loaded, jump to the first one.
+    if (suggestions.length > 0) {
+      pickSuggestion(suggestions[0]);
+      return;
+    }
 
     setBusy(true);
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          searchQuery.trim()
+          query
         )}&limit=1`
       );
       const results = (await res.json()) as Array<{ lat: string; lon: string }>;
@@ -225,37 +291,58 @@ export default function MapPicker({
 
   return (
     <div className="map-picker">
-      <form onSubmit={handleSearch} className="map-search">
+      <div className="map-search">
         <input
           type="text"
           className="form-input"
-          placeholder="Search address…"
+          placeholder={t("mapSearchPlaceholder")}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           disabled={busy}
         />
         <button
-          type="submit"
+          type="button"
           className="btn btn-secondary"
+          onClick={() => void handleSearch()}
           disabled={busy || !searchQuery.trim()}
         >
-          {busy ? "Working…" : "Search"}
+          {busy ? t("mapSearching") : t("mapSearchButton")}
         </button>
-      </form>
+      </div>
+
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="map-suggestions">
+          {suggestions.map((suggestion, i) => (
+            <button
+              key={`${suggestion.lat},${suggestion.lon},${i}`}
+              type="button"
+              className="dropdown-item"
+              onClick={() => pickSuggestion(suggestion)}
+            >
+              {suggestion.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div ref={containerRef} className="map-canvas" />
 
-      {busy && <div className="map-status">Looking up location…</div>}
+      {busy && <div className="map-status">{t("mapLookingUpLocation")}</div>}
 
       {hasCoords && (
         <div className="map-coords">
-          Lat: {value.latitude.toFixed(5)}, Lng: {value.longitude.toFixed(5)}
-          {displayName || value.city || value.address
-            ? ` · ${
-                displayName ||
-                [value.city, value.address].filter(Boolean).join(", ")
-              }`
-            : ""}
+          {t("mapCoordsFormat", {
+            lat: value.latitude.toFixed(5),
+            lng: value.longitude.toFixed(5),
+            address:
+              displayName ||
+              [value.city, value.address].filter(Boolean).join(", ")
+                ? ` · ${
+                    displayName ||
+                    [value.city, value.address].filter(Boolean).join(", ")
+                  }`
+                : "",
+          })}
         </div>
       )}
     </div>

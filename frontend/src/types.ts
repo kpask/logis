@@ -18,6 +18,7 @@ export interface CreateUserRequest {
   username: string;
   email: string;
   password: string;
+  language?: Language;
 }
 
 /**
@@ -228,6 +229,7 @@ export interface CreateInvitedUserRequest {
   username: string;
   password: string;
   token: string;
+  language?: Language;
 }
 
 export interface InviteUserRequest {

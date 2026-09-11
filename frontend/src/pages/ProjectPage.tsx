@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   companiesApi,
   getErrorMessage,
@@ -13,7 +13,6 @@ import type {
   ProjectStatus,
   TimeEntryLogStatus,
   TimeEntryResponse,
-  TimeWorkedResponse,
   UserResponse,
   WorkplaceResponse,
 } from "../types";
@@ -37,14 +36,12 @@ import {
 import {
   distanceMeters,
   durationToSeconds,
-  elapsedSecondsFrom,
   formatDate,
   formatDateTime,
   formatDuration,
   formatDurationHuman,
   formatMonthDay,
   formatTime,
-  formatTimer,
   fromLocalDateTimeValue,
   getBrowserPosition,
   getInitials,
@@ -52,8 +49,6 @@ import {
   parseDate,
   toDateKey,
   toLocalDateTimeValue,
-  workedSecondsForDate,
-  workedSecondsInMonth,
 } from "../utils";
 import { useI18n } from "../i18n";
 
@@ -113,9 +108,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [workplace, setWorkplace] = useState<WorkplaceResponse | null>(null);
   const [timeEntries, setTimeEntries] = useState<TimeEntryResponse[]>([]);
-  // Per-user, per-day worked time computed by the backend (lunch already
-  // deducted) — the frontend only filters and displays these rows.
-  const [timeWorked, setTimeWorked] = useState<TimeWorkedResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,14 +122,12 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string>(toDateKey(today));
 
-  // Timer state
+  // Timer state (compact header button — no big live counter)
   const [activeEntry, setActiveEntry] = useState<TimeEntryResponse | null>(
     null
   );
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [timerActionLoading, setTimerActionLoading] = useState(false);
   const [timerError, setTimerError] = useState<string | null>(null);
-  const tickRef = useRef<number | null>(null);
 
   // Clock-in flow state: the Start button locates the worker first; when
   // they appear to be outside the work area, the confirmation popup opens.
@@ -199,18 +189,17 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
 
     try {
       // Entries scoped to this project by the backend (managers get
-      // everyone's entries, regular members get only their own). Worked-time
-      // totals come pre-computed from the backend as per-user, per-day rows.
-      const [proj, entries, workerList, worked] = await Promise.all([
+      // everyone's entries, regular members get only their own). Totals on
+      // this page are raw tracked time — the lunch deduction is applied at
+      // workplace level, where all of a person's time is aggregated.
+      const [proj, entries, workerList] = await Promise.all([
         projectsApi.get(projectId),
         timeTrackingApi.getByProject(projectId),
         projectsApi.getWorkers(projectId),
-        timeTrackingApi.getTimeWorkedByProject(projectId),
       ]);
       setProject(proj);
       setTimeEntries(entries);
       setWorkers(workerList);
-      setTimeWorked(worked);
 
       // Check if there's an active (running) entry of the current user
       // among this project's entries.
@@ -218,7 +207,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         (e) => !e.endTime && (!user || e.workerId === user.id)
       );
       setActiveEntry(running || null);
-      setElapsedSeconds(elapsedSecondsFrom(running?.startTime ?? null));
 
       if (proj.workplaceId) {
         const wp = await workplacesApi.get(proj.workplaceId);
@@ -263,22 +251,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     setSelectedMember("all");
   }, [projectId]);
 
-  // Timer tick — updates elapsed time every second while a timer is running
-  useEffect(() => {
-    if (activeEntry) {
-      tickRef.current = window.setInterval(() => {
-        setElapsedSeconds(elapsedSecondsFrom(activeEntry.startTime));
-      }, 1000);
-    }
-
-    return () => {
-      if (tickRef.current !== null) {
-        window.clearInterval(tickRef.current);
-        tickRef.current = null;
-      }
-    };
-  }, [activeEntry]);
-
   async function startTimer(
     coords: { latitude: number; longitude: number } | null
   ) {
@@ -289,7 +261,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         longitude: coords?.longitude ?? null,
       });
       setActiveEntry(entry);
-      setElapsedSeconds(0);
       if (entry.status === "LOGGED_OUTSIDE") {
         setTimerError(t("projectTimerOutsideWarning"));
       }
@@ -345,7 +316,6 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
     try {
       const stopped = await timeTrackingApi.stop(activeEntry.id);
       setActiveEntry(null);
-      setElapsedSeconds(0);
 
       // Refresh the data so the calendar marks the day and the list updates.
       await loadData();
@@ -588,32 +558,28 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
   // Only completed (stopped) entries count toward totals.
   const completedEntries = visibleEntries.filter((e) => e.endTime);
 
-  // Backend-computed worked rows, narrowed by the manager member filter just
-  // like the entries above. Each row is one user's total for one day with
-  // company rules (lunch) already applied — no frontend math.
-  const visibleWorkedRows =
-    isManager && selectedMember !== "all"
-      ? timeWorked.filter((row) => row.userId === selectedMember)
-      : timeWorked;
-
-  // Days that have at least one logged entry (red on the calendar).
-  const workedDays = new Set(visibleWorkedRows.map((row) => row.date));
-
-  // Total worked within the currently displayed calendar month.
-  const monthTotalSeconds = workedSecondsInMonth(
-    visibleWorkedRows,
-    viewYear,
-    viewMonth
+  // Days that have at least one logged entry (marked on the calendar).
+  const workedDays = new Set(
+    completedEntries.map((e) => toDateKey(new Date(e.startTime)))
   );
+
+  // Total tracked within the currently displayed calendar month (raw — the
+  // lunch deduction is applied at workplace level, not per project).
+  const monthTotalSeconds = completedEntries
+    .filter((e) => {
+      const d = new Date(e.startTime);
+      return d.getFullYear() === viewYear && d.getMonth() === viewMonth;
+    })
+    .reduce((sum, e) => sum + durationToSeconds(e.duration), 0);
 
   // Entries for the currently selected date only.
   const selectedEntries = completedEntries.filter(
     (e) => toDateKey(new Date(e.startTime)) === selectedDate
   );
-  // Total worked for the selected day.
-  const selectedTotalSeconds = workedSecondsForDate(
-    visibleWorkedRows,
-    selectedDate
+  // Total tracked for the selected day.
+  const selectedTotalSeconds = selectedEntries.reduce(
+    (sum, e) => sum + durationToSeconds(e.duration),
+    0
   );
 
   const showWorkerColumn = isManager && selectedMember === "all";
@@ -666,6 +632,29 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
               {project.projectName}
             </h1>
             <StatusBadge status={project.projectStatus} />
+            {activeEntry ? (
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={handleStopTimer}
+                disabled={timerActionLoading}
+              >
+                <IconStop />
+                {timerActionLoading
+                  ? t("projectStopping")
+                  : t("projectStopTimer")}
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleStartTimer}
+                disabled={timerActionLoading || locating}
+              >
+                <IconPlay />
+                {locating
+                  ? t("projectCheckingLocation")
+                  : t("projectStartTimer")}
+              </button>
+            )}
             {isManager && (
               <>
                 <button
@@ -774,46 +763,14 @@ export default function ProjectPage({ projectId, onBack }: ProjectPageProps) {
         )}
       </div>
 
-      <div className="project-timing-panel">
-        {/* Timer above the calendar */}
-        <div className="card timer-card" style={{ marginBottom: 0 }}>
-          <div className="muted small" style={{ marginBottom: 8 }}>
-            {activeEntry ? t("projectTimerRunning") : t("projectNoTimer")}
-          </div>
-          <div className="timer-display" style={{ marginBottom: 20 }}>
-            {formatTimer(elapsedSeconds)}
-          </div>
-
-          {timerError && (
-            <div style={{ marginBottom: 16 }}>
-              <Alert>{timerError}</Alert>
-            </div>
-          )}
-
-          {activeEntry ? (
-            <button
-              className="btn btn-danger btn-lg"
-              onClick={handleStopTimer}
-              disabled={timerActionLoading}
-            >
-              <IconStop />
-              {timerActionLoading
-                ? t("projectStopping")
-                : t("projectStopTimer")}
-            </button>
-          ) : (
-            <button
-              className="btn btn-primary btn-lg"
-              onClick={handleStartTimer}
-              disabled={timerActionLoading || locating}
-            >
-              <IconPlay />
-              {locating ? t("projectCheckingLocation") : t("projectStartTimer")}
-            </button>
-          )}
+      {timerError && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <Alert>{timerError}</Alert>
         </div>
+      )}
 
-        {/* Calendar below timer */}
+      <div className="project-timing-panel">
+        {/* Calendar */}
         <div className="card calendar-card">
           {isManager && (
             <div style={{ marginBottom: 12 }}>

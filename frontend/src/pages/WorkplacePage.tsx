@@ -7,9 +7,11 @@ import {
   timeTrackingApi,
   workplacesApi,
 } from "../api";
+import ClockInModal from "../ClockInModal";
 import MapPicker from "../MapPicker";
 import type {
   CompanyResponse,
+  CompanySettingsResponse,
   Location,
   ProjectResponse,
   ProjectStatus,
@@ -27,7 +29,9 @@ import {
   IconClock,
   IconFolder,
   IconMapPin,
+  IconPlay,
   IconPlus,
+  IconStop,
   IconTrash,
   LoadingState,
   MemberSelect,
@@ -36,14 +40,20 @@ import {
   StatusBadge,
 } from "../components";
 import {
+  distanceMeters,
   durationToSeconds,
   formatDate,
+  formatDateTime,
   formatDuration,
   formatDurationHuman,
   formatMonthDay,
   formatTime,
+  fromLocalDateTimeValue,
+  getBrowserPosition,
   isManagerOrHigher,
+  parseDate,
   toDateKey,
+  toLocalDateTimeValue,
   workedSecondsForDate,
   workedSecondsInMonth,
 } from "../utils";
@@ -136,6 +146,45 @@ export default function WorkplacePage({
     null
   );
 
+  // Timer (start from the workplace; a project is required for attribution)
+  const [timerActionLoading, setTimerActionLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [timerError, setTimerError] = useState<string | null>(null);
+  const [showStartTimerModal, setShowStartTimerModal] = useState(false);
+  const [startTimerProjectId, setStartTimerProjectId] = useState<number | "">(
+    ""
+  );
+  const [clockInPrompt, setClockInPrompt] = useState<{
+    projectId: number;
+    position: { latitude: number; longitude: number } | null;
+  } | null>(null);
+
+  // Company settings (default work times for the manual add-entry form)
+  const [companySettings, setCompanySettings] =
+    useState<CompanySettingsResponse | null>(null);
+
+  // Manager add-entry modal state (workplace level: project + worker + times)
+  const [showAddEntryModal, setShowAddEntryModal] = useState(false);
+  const [addEntryProjectId, setAddEntryProjectId] = useState<number | "">("");
+  const [addEntryWorkerId, setAddEntryWorkerId] = useState<number | "">("");
+  const [addEntryProjectWorkers, setAddEntryProjectWorkers] = useState<
+    UserResponse[]
+  >([]);
+  const [addEntryWorkersLoading, setAddEntryWorkersLoading] = useState(false);
+  const [addEntryStart, setAddEntryStart] = useState("");
+  const [addEntryEnd, setAddEntryEnd] = useState("");
+  const [entrySubmitting, setEntrySubmitting] = useState(false);
+  const [entryError, setEntryError] = useState<string | null>(null);
+
+  // Manager edit/delete modal state
+  const [editingEntry, setEditingEntry] = useState<TimeEntryResponse | null>(
+    null
+  );
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [entryEditSubmitting, setEntryEditSubmitting] = useState(false);
+  const [entryEditError, setEntryEditError] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -169,6 +218,15 @@ export default function WorkplacePage({
             const me = memberList.find((m) => m.id === user.id);
             setIsManager(isManagerOrHigher(me?.companyRole));
             setMembers(memberList);
+
+            if (isManagerOrHigher(me?.companyRole)) {
+              // Company settings (default work times for the add-entry form)
+              try {
+                setCompanySettings(await companiesApi.getSettings());
+              } catch {
+                setCompanySettings(null);
+              }
+            }
           } catch {
             setIsManager(false);
             setMembers([]);
@@ -345,6 +403,203 @@ export default function WorkplacePage({
     }
   }
 
+  // ── Timer (start/stop from the workplace) ───────────────────
+
+  async function startTimer(
+    projectId: number,
+    coords: { latitude: number; longitude: number } | null
+  ) {
+    setTimerActionLoading(true);
+    try {
+      const entry = await timeTrackingApi.start(projectId, {
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+      });
+      if (entry.status === "LOGGED_OUTSIDE") {
+        setTimerError(t("projectTimerOutsideWarning"));
+      }
+      await loadData();
+    } catch (err) {
+      setTimerError(getErrorMessage(err));
+    } finally {
+      setTimerActionLoading(false);
+    }
+  }
+
+  /**
+   * Start flow for a chosen project: locate the worker first; inside the
+   * work area (or workplace without location) → start silently; outside /
+   * location unavailable → open the confirmation popup.
+   */
+  async function beginStartTimer(projectId: number) {
+    setTimerError(null);
+    setLocating(true);
+    try {
+      const position = await getBrowserPosition();
+
+      const wp = workplace?.location ?? null;
+      const radius = workplace?.radiusDistance ?? 150;
+      const inside =
+        !wp ||
+        !position ||
+        distanceMeters(
+          wp.latitude,
+          wp.longitude,
+          position.latitude,
+          position.longitude
+        ) <= radius;
+
+      if (inside) {
+        await startTimer(projectId, position);
+      } else {
+        setClockInPrompt({ projectId, position });
+      }
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  function handleStartTimerClick() {
+    setTimerError(null);
+    // Only one project available → start immediately, no picker.
+    if (projects.length === 1) {
+      void beginStartTimer(projects[0].id);
+      return;
+    }
+    setStartTimerProjectId("");
+    setShowStartTimerModal(true);
+  }
+
+  async function handleStopTimer() {
+    if (!myRunningEntry) return;
+    setTimerError(null);
+    setTimerActionLoading(true);
+    try {
+      await timeTrackingApi.stop(myRunningEntry.id);
+      await loadData();
+    } catch (err) {
+      setTimerError(getErrorMessage(err));
+    } finally {
+      setTimerActionLoading(false);
+    }
+  }
+
+  // ── Manager time-entry management (add / edit / delete) ─────
+
+  function openAddEntryModal() {
+    setAddEntryProjectId("");
+    setAddEntryWorkerId("");
+    setAddEntryProjectWorkers([]);
+    const settings = companySettings;
+    setAddEntryStart(
+      `${selectedDate}T${settings?.defaultStartTime ?? "07:30"}`
+    );
+    setAddEntryEnd(`${selectedDate}T${settings?.defaultEndTime ?? "16:30"}`);
+    setEntryError(null);
+    setShowAddEntryModal(true);
+  }
+
+  // When the chosen project changes, load its active workers for the
+  // worker dropdown (the backend requires the worker to be assigned).
+  async function handleAddEntryProjectChange(projectId: number | "") {
+    setAddEntryProjectId(projectId);
+    setAddEntryWorkerId("");
+    setAddEntryProjectWorkers([]);
+    if (!projectId) return;
+    setAddEntryWorkersLoading(true);
+    try {
+      setAddEntryProjectWorkers(await projectsApi.getWorkers(projectId));
+    } catch {
+      setAddEntryProjectWorkers([]);
+    } finally {
+      setAddEntryWorkersLoading(false);
+    }
+  }
+
+  async function handleAddEntry() {
+    if (!addEntryProjectId || !addEntryWorkerId) return;
+    const startIso = fromLocalDateTimeValue(addEntryStart);
+    const endIso = fromLocalDateTimeValue(addEntryEnd);
+    if (!startIso || !endIso) {
+      setEntryError(t("addEntryErrorTimesRequired"));
+      return;
+    }
+    if (new Date(endIso) <= new Date(startIso)) {
+      setEntryError(t("addEntryErrorEndBeforeStart"));
+      return;
+    }
+
+    setEntrySubmitting(true);
+    setEntryError(null);
+    try {
+      await timeTrackingApi.create(addEntryProjectId, {
+        workerId: addEntryWorkerId,
+        startTime: startIso,
+        endTime: endIso,
+      });
+      setShowAddEntryModal(false);
+      await loadData();
+    } catch (err) {
+      setEntryError(getErrorMessage(err));
+    } finally {
+      setEntrySubmitting(false);
+    }
+  }
+
+  function openEditEntryModal(entry: TimeEntryResponse) {
+    setEditingEntry(entry);
+    setEditStart(toLocalDateTimeValue(parseDate(entry.startTime)));
+    setEditEnd(toLocalDateTimeValue(parseDate(entry.endTime)));
+    setEditError(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingEntry) return;
+    const startIso = fromLocalDateTimeValue(editStart);
+    const endIso = fromLocalDateTimeValue(editEnd);
+    if (!startIso || !endIso) {
+      setEditError(t("addEntryErrorTimesRequired"));
+      return;
+    }
+    if (new Date(endIso) <= new Date(startIso)) {
+      setEditError(t("addEntryErrorEndBeforeStart"));
+      return;
+    }
+
+    setEntryEditSubmitting(true);
+    setEntryEditError(null);
+    try {
+      await timeTrackingApi.update(editingEntry.id, {
+        startTime: startIso,
+        endTime: endIso,
+      });
+      setEditingEntry(null);
+      await loadData();
+    } catch (err) {
+      setEntryEditError(getErrorMessage(err));
+    } finally {
+      setEntryEditSubmitting(false);
+    }
+  }
+
+  async function handleDeleteEntry() {
+    if (!editingEntry) return;
+    const confirmed = window.confirm(t("editEntryDeleteConfirm"));
+    if (!confirmed) return;
+
+    setEntryEditSubmitting(true);
+    setEntryEditError(null);
+    try {
+      await timeTrackingApi.delete(editingEntry.id);
+      setEditingEntry(null);
+      await loadData();
+    } catch (err) {
+      setEntryEditError(getErrorMessage(err));
+    } finally {
+      setEntryEditSubmitting(false);
+    }
+  }
+
   if (loading) {
     return <LoadingState label={t("workplaceLoading")} />;
   }
@@ -422,6 +677,11 @@ export default function WorkplacePage({
   );
   const projectNameById = new Map(projects.map((p) => [p.id, p.projectName]));
 
+  // The current user's running timer within this workplace (if any).
+  const myRunningEntry =
+    timeEntries.find((e) => !e.endTime && (!user || e.workerId === user.id)) ||
+    null;
+
   return (
     <div className="page-container page-container--compact">
       <div className="page-header">
@@ -483,6 +743,12 @@ export default function WorkplacePage({
         </div>
       )}
 
+      {timerError && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <Alert>{timerError}</Alert>
+        </div>
+      )}
+
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div
@@ -512,6 +778,33 @@ export default function WorkplacePage({
                   }`
                 : t("noLocationSet")}
             </div>
+          </div>
+          <div style={{ marginLeft: "auto", flexShrink: 0 }}>
+            {myRunningEntry ? (
+              <button
+                className="btn btn-danger"
+                onClick={handleStopTimer}
+                disabled={timerActionLoading}
+              >
+                <IconStop />
+                {timerActionLoading
+                  ? t("projectStopping")
+                  : t("projectStopTimer")}
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={handleStartTimerClick}
+                disabled={
+                  timerActionLoading || locating || projects.length === 0
+                }
+              >
+                <IconPlay />
+                {locating
+                  ? t("projectCheckingLocation")
+                  : t("projectStartTimer")}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -662,13 +955,24 @@ export default function WorkplacePage({
             <h2 style={{ margin: 0 }}>
               {formatMonthDay(selectedDate, language)}
             </h2>
-            {selectedEntries.length > 0 && (
-              <span className="badge badge-primary">
-                {t("loggedSuffix", {
-                  time: formatDurationHuman(selectedTotalSeconds, language),
-                })}
-              </span>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {selectedEntries.length > 0 && (
+                <span className="badge badge-primary">
+                  {t("loggedSuffix", {
+                    time: formatDurationHuman(selectedTotalSeconds, language),
+                  })}
+                </span>
+              )}
+              {isManager && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={openAddEntryModal}
+                >
+                  <IconPlus />
+                  {t("projectLogTime")}
+                </button>
+              )}
+            </div>
           </div>
 
           {selectedEntries.length === 0 ? (
@@ -696,7 +1000,13 @@ export default function WorkplacePage({
                 </thead>
                 <tbody>
                   {selectedEntries.map((entry) => (
-                    <tr key={entry.id}>
+                    <tr
+                      key={entry.id}
+                      style={{ cursor: isManager ? "pointer" : "default" }}
+                      onClick={
+                        isManager ? () => openEditEntryModal(entry) : undefined
+                      }
+                    >
                       <td>{formatTime(entry.startTime, language)}</td>
                       <td>{formatTime(entry.endTime, language)}</td>
                       <td style={{ fontWeight: 500 }}>
@@ -734,6 +1044,283 @@ export default function WorkplacePage({
           )}
         </div>
       </div>
+
+      {showStartTimerModal && (
+        <Modal
+          title={t("projectStartTimer")}
+          description={t("workplaceStartTimerDesc")}
+          onClose={() => setShowStartTimerModal(false)}
+          footer={
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowStartTimerModal(false)}
+                disabled={timerActionLoading || locating}
+              >
+                {t("cancel")}
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  if (startTimerProjectId) {
+                    const projectId = startTimerProjectId;
+                    setShowStartTimerModal(false);
+                    void beginStartTimer(projectId);
+                  }
+                }}
+                disabled={
+                  timerActionLoading || locating || !startTimerProjectId
+                }
+              >
+                {locating
+                  ? t("projectCheckingLocation")
+                  : t("projectStartTimer")}
+              </button>
+            </>
+          }
+        >
+          <div className="form-group">
+            <label className="form-label" htmlFor="start-timer-project">
+              {t("colProject")}
+            </label>
+            <select
+              id="start-timer-project"
+              className="form-input"
+              value={startTimerProjectId}
+              onChange={(e) => setStartTimerProjectId(Number(e.target.value))}
+              disabled={timerActionLoading || locating}
+            >
+              <option value="">{t("workplaceProjectPlaceholder")}</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.projectName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Modal>
+      )}
+
+      {clockInPrompt && (
+        <ClockInModal
+          workplace={workplace}
+          position={clockInPrompt.position}
+          onClose={() => setClockInPrompt(null)}
+          onConfirm={() => {
+            const { projectId, position } = clockInPrompt;
+            setClockInPrompt(null);
+            void startTimer(projectId, position);
+          }}
+        />
+      )}
+
+      {showAddEntryModal && (
+        <Modal
+          title={t("addEntryTitle")}
+          description={t("workplaceAddEntryDesc", {
+            date: formatMonthDay(selectedDate, language),
+          })}
+          onClose={() => {
+            setShowAddEntryModal(false);
+            setEntryError(null);
+          }}
+          footer={
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowAddEntryModal(false);
+                  setEntryError(null);
+                }}
+                disabled={entrySubmitting}
+              >
+                {t("cancel")}
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleAddEntry}
+                disabled={
+                  entrySubmitting || !addEntryProjectId || !addEntryWorkerId
+                }
+              >
+                {entrySubmitting
+                  ? t("addEntrySubmitting")
+                  : t("addEntrySubmit")}
+              </button>
+            </>
+          }
+        >
+          {entryError && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert>{entryError}</Alert>
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add-entry-project">
+                {t("colProject")}
+              </label>
+              <select
+                id="add-entry-project"
+                className="form-input"
+                value={
+                  addEntryProjectId === "" ? "" : String(addEntryProjectId)
+                }
+                onChange={(e) =>
+                  void handleAddEntryProjectChange(
+                    e.target.value === "" ? "" : Number(e.target.value)
+                  )
+                }
+                disabled={entrySubmitting}
+              >
+                <option value="" disabled>
+                  {t("workplaceProjectPlaceholder")}
+                </option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.projectName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add-entry-worker">
+                {t("addEntryWorkerLabel")}
+              </label>
+              <select
+                id="add-entry-worker"
+                className="form-input"
+                value={addEntryWorkerId === "" ? "" : String(addEntryWorkerId)}
+                onChange={(e) =>
+                  setAddEntryWorkerId(
+                    e.target.value === "" ? "" : Number(e.target.value)
+                  )
+                }
+                disabled={
+                  entrySubmitting ||
+                  !addEntryProjectId ||
+                  addEntryWorkersLoading
+                }
+              >
+                <option value="" disabled>
+                  {t("addEntryWorkerPlaceholder")}
+                </option>
+                {addEntryProjectWorkers.map((worker) => (
+                  <option key={worker.id} value={worker.id}>
+                    {worker.name} {worker.lastname}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add-entry-start">
+                {t("addEntryStartLabel")}
+              </label>
+              <input
+                id="add-entry-start"
+                type="datetime-local"
+                className="form-input"
+                value={addEntryStart}
+                onChange={(e) => setAddEntryStart(e.target.value)}
+                disabled={entrySubmitting}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="add-entry-end">
+                {t("addEntryEndLabel")}
+              </label>
+              <input
+                id="add-entry-end"
+                type="datetime-local"
+                className="form-input"
+                value={addEntryEnd}
+                onChange={(e) => setAddEntryEnd(e.target.value)}
+                disabled={entrySubmitting}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {editingEntry && (
+        <Modal
+          title={t("editEntryTitle")}
+          description={
+            editingEntry.endTime
+              ? t("editEntryTimeRange", {
+                  start: formatDateTime(editingEntry.startTime, language),
+                  end: formatDateTime(editingEntry.endTime, language),
+                })
+              : t("editEntryRunningWarning")
+          }
+          onClose={() => setEditingEntry(null)}
+          footer={
+            <>
+              <button
+                className="btn btn-danger"
+                onClick={handleDeleteEntry}
+                disabled={entryEditSubmitting}
+              >
+                {entryEditSubmitting
+                  ? t("editEntryDeleting")
+                  : t("editEntryDelete")}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setEditingEntry(null)}
+                disabled={entryEditSubmitting}
+              >
+                {t("cancel")}
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveEdit}
+                disabled={entryEditSubmitting || !editingEntry.endTime}
+              >
+                {entryEditSubmitting
+                  ? t("editEntrySubmitting")
+                  : t("editEntrySubmit")}
+              </button>
+            </>
+          }
+        >
+          {entryEditError && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert>{entryEditError}</Alert>
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="grid-2" style={{ gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-start">
+                  {t("addEntryStartLabel")}
+                </label>
+                <input
+                  id="edit-start"
+                  type="datetime-local"
+                  className="form-input"
+                  value={editStart}
+                  onChange={(e) => setEditStart(e.target.value)}
+                  disabled={entryEditSubmitting || !editingEntry.endTime}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-end">
+                  {t("addEntryEndLabel")}
+                </label>
+                <input
+                  id="edit-end"
+                  type="datetime-local"
+                  className="form-input"
+                  value={editEnd}
+                  onChange={(e) => setEditEnd(e.target.value)}
+                  disabled={entryEditSubmitting || !editingEntry.endTime}
+                />
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showEditWorkplace && (
         <Modal

@@ -14,4 +14,6 @@ public interface ProjectWorkerRepository extends JpaRepository<ProjectWorker, Lo
     List<ProjectWorker> findByProject_Id(Long id);
 
     List<ProjectWorker> findByWorker_Id(Long userId);
+
+    List<ProjectWorker> findByWorker_IdAndProject_Workplace_IdAndEndDateIsNull(Long workerId, Long workplaceId);
 }

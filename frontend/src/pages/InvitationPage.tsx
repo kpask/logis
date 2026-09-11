@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../auth";
 import { getErrorMessage, invitationsApi, isApiError } from "../api";
-import type { InvitationResponse } from "../types";
+import type { InvitationResponse, Language } from "../types";
 import { Alert, LoadingState } from "../components";
 import { parseDate } from "../utils";
 import { useI18n } from "../i18n";
+import type { TranslationKey } from "../translations";
+
+const LANGUAGE_OPTIONS: {
+  value: Language;
+  code: string;
+  flag: string;
+  labelKey: TranslationKey;
+}[] = [
+  { value: "EN", code: "EN", flag: "🇬🇧", labelKey: "languageEnglish" },
+  { value: "LT", code: "LT", flag: "🇱🇹", labelKey: "languageLithuanian" },
+];
 
 interface InvitationPageProps {
   token: string;
@@ -18,7 +29,7 @@ export default function InvitationPage({
   onGoToLogin,
 }: InvitationPageProps) {
   const { registerWithInvitation } = useAuth();
-  const { t } = useI18n();
+  const { t, language, setLanguage } = useI18n();
 
   const [invitation, setInvitation] = useState<InvitationResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,6 +120,7 @@ export default function InvitationPage({
         username: username.trim(),
         password,
         token,
+        language,
       });
     } catch (err) {
       setFormError(getErrorMessage(err));
@@ -124,6 +136,30 @@ export default function InvitationPage({
   return (
     <div className="auth-page">
       <div className="auth-card auth-card--invitation">
+        <div
+          className="auth-lang-switch"
+          role="group"
+          aria-label={t("signupLanguageLabel")}
+        >
+          {LANGUAGE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={
+                "auth-lang-option" +
+                (language === option.value ? " active" : "")
+              }
+              onClick={() => setLanguage(option.value, false)}
+              aria-pressed={language === option.value}
+              aria-label={t(option.labelKey)}
+              title={t(option.labelKey)}
+            >
+              <span aria-hidden="true">{option.flag}</span>
+              {option.code}
+            </button>
+          ))}
+        </div>
+
         <div className="auth-logo">
           <div className="auth-logo-icon">L</div>
           <div className="auth-logo-text">Logis</div>

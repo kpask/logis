@@ -30,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -191,19 +192,38 @@ class ProjectServiceTest {
     }
 
     @Test
-    void getWorkplaceProjectsByWorkplaceIdAndUser_returnsProjects_whenUserBelongsToCompany() {
+    void getWorkplaceProjectsByWorkplaceIdAndUser_returnsOnlyActiveAssignments_forRegularMember() {
         Company company = company(10L);
         User user = member(2L, company);
         Workplace workplace = workplace(20L, company);
-        Project project = project(30L, workplace);
+        Project assigned = project(30L, workplace);
         when(userService.findUser(2L)).thenReturn(user);
         when(workplaceService.findWorkplace(20L)).thenReturn(workplace);
-        when(projectRepository.findByWorkplace_Id(20L)).thenReturn(List.of(project));
+        when(projectWorkerRepository.findByWorker_IdAndProject_Workplace_IdAndEndDateIsNull(2L, 20L))
+                .thenReturn(List.of(projectWorker(40L, user, assigned, null)));
 
         List<ProjectResponse> projects = projectService.getWorkplaceProjectsByWorkplaceIdAndUser(20L, 2L);
 
         assertThat(projects).hasSize(1);
         assertThat(projects.get(0).id()).isEqualTo(30L);
+        verify(projectRepository, never()).findByWorkplace_Id(20L);
+    }
+
+    @Test
+    void getWorkplaceProjectsByWorkplaceIdAndUser_returnsAllProjects_forManager() {
+        Company company = company(10L);
+        User manager = manager(1L, company);
+        Workplace workplace = workplace(20L, company);
+        Project project = project(30L, workplace);
+        when(userService.findUser(1L)).thenReturn(manager);
+        when(workplaceService.findWorkplace(20L)).thenReturn(workplace);
+        when(projectRepository.findByWorkplace_Id(20L)).thenReturn(List.of(project));
+
+        List<ProjectResponse> projects = projectService.getWorkplaceProjectsByWorkplaceIdAndUser(20L, 1L);
+
+        assertThat(projects).hasSize(1);
+        assertThat(projects.get(0).id()).isEqualTo(30L);
+        verify(projectWorkerRepository, never()).findByWorker_IdAndProject_Workplace_IdAndEndDateIsNull(anyLong(), anyLong());
     }
 
     @Test

@@ -31,53 +31,6 @@ import { getInitials, isManagerOrHigher } from "../utils";
 import { useI18n } from "../i18n";
 import MapPicker from "../MapPicker";
 
-interface MemberActionsMenuProps {
-  member: UserResponse;
-  isManager: boolean;
-  isSelf: boolean;
-  busy: boolean;
-  onOpenCalendar: () => void;
-  onPromote?: () => void;
-  onKick?: () => void;
-}
-
-/**
- * The "⋮" context menu for a member row: view calendar for everyone,
- * plus promote/kick for managers acting on other members.
- */
-function MemberActionsMenu({
-  member,
-  isManager,
-  isSelf,
-  busy,
-  onOpenCalendar,
-  onPromote,
-  onKick,
-}: MemberActionsMenuProps) {
-  const { t } = useI18n();
-  const items: DropdownMenuItem[] = [
-    { label: t("dashboardViewCalendar"), onSelect: onOpenCalendar },
-  ];
-  if (isManager && !isSelf) {
-    if (member.companyRole === "USER") {
-      items.push({
-        label: t("dashboardPromoteToManager"),
-        disabled: busy,
-        onSelect: () => onPromote?.(),
-      });
-    }
-    if (member.companyRole !== "OWNER") {
-      items.push({
-        label: t("dashboardKickFromCompany"),
-        danger: true,
-        disabled: busy,
-        onSelect: () => onKick?.(),
-      });
-    }
-  }
-  return <DropdownMenu items={items} disabled={busy} />;
-}
-
 function roleBadge(role: CompanyRole | null | undefined) {
   const { t } = useI18n();
   if (role === "OWNER") {
@@ -128,6 +81,8 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
   const [workplaceLocation, setWorkplaceLocation] = useState<Location | null>(
     null
   );
+  const [workplaceRadius, setWorkplaceRadius] = useState(150);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [workplaceSubmitting, setWorkplaceSubmitting] = useState(false);
   const [workplaceError, setWorkplaceError] = useState<string | null>(null);
 
@@ -289,6 +244,15 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
     }
   }
 
+  function closeCreateWorkplace() {
+    setShowCreateWorkplace(false);
+    setWorkplaceName("");
+    setWorkplaceLocation(null);
+    setWorkplaceRadius(150);
+    setShowLocationPicker(false);
+    setWorkplaceError(null);
+  }
+
   async function handleCreateWorkplace(e: FormEvent) {
     e.preventDefault();
     setWorkplaceError(null);
@@ -302,13 +266,11 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
     try {
       const created = await workplacesApi.create({
         name: workplaceName.trim(),
-        radiusDistance: null,
-        location: workplaceLocation,
+        location: showLocationPicker ? workplaceLocation : null,
+        radiusDistance: showLocationPicker ? workplaceRadius : null,
       });
       setWorkplaces((prev) => [...prev, created]);
-      setShowCreateWorkplace(false);
-      setWorkplaceName("");
-      setWorkplaceLocation(null);
+      closeCreateWorkplace();
     } catch (err) {
       setWorkplaceError(getErrorMessage(err));
     } finally {
@@ -907,12 +869,12 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
         <Modal
           title={t("createWorkplaceTitle")}
           description={t("createWorkplaceDesc")}
-          onClose={() => setShowCreateWorkplace(false)}
+          onClose={closeCreateWorkplace}
           footer={
             <>
               <button
                 className="btn btn-secondary"
-                onClick={() => setShowCreateWorkplace(false)}
+                onClick={closeCreateWorkplace}
                 disabled={workplaceSubmitting}
               >
                 {t("cancel")}
@@ -950,13 +912,59 @@ export default function DashboardPage({ onOpenWorkplace }: DashboardPageProps) {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showLocationPicker}
+                  onChange={(e) => {
+                    setShowLocationPicker(e.target.checked);
+                    if (!e.target.checked) {
+                      setWorkplaceLocation(null);
+                    }
+                  }}
+                  disabled={workplaceSubmitting}
+                />
                 {t("createWorkplaceSetLocation")}
               </label>
-              <MapPicker
-                value={workplaceLocation}
-                onChange={setWorkplaceLocation}
-              />
+              {showLocationPicker && (
+                <div style={{ marginTop: 12 }}>
+                  <MapPicker
+                    value={workplaceLocation}
+                    onChange={setWorkplaceLocation}
+                    radiusMeters={workplaceRadius}
+                  />
+                  <div style={{ marginTop: 12 }}>
+                    <label className="form-label" htmlFor="workplace-radius">
+                      {t("createWorkplaceRadiusLabel", {
+                        radius: workplaceRadius,
+                      })}
+                    </label>
+                    <input
+                      id="workplace-radius"
+                      type="range"
+                      min={50}
+                      max={2000}
+                      step={10}
+                      className="form-input"
+                      value={workplaceRadius}
+                      onChange={(e) =>
+                        setWorkplaceRadius(Number(e.target.value))
+                      }
+                      disabled={workplaceSubmitting}
+                    />
+                    <div className="muted small">
+                      {t("createWorkplaceRadiusHelp")}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </form>
         </Modal>

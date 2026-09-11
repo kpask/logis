@@ -908,6 +908,7 @@ a {
 }
 
 .auth-card {
+  position: relative;
   width: 100%;
   max-width: 420px;
   background: var(--color-surface);
@@ -915,6 +916,44 @@ a {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: var(--space-8);
+}
+
+/* Small LT/EN language switch pinned to the top-right corner of the
+   signup card. */
+.auth-lang-switch {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.auth-lang-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.auth-lang-option:hover:not(.active) {
+  background: #f1f5f9;
+  color: var(--color-text);
+}
+
+.auth-lang-option.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 /* Invitation cards get a prominent top accent so it is immediately
@@ -1376,6 +1415,19 @@ a {
 
 .map-search .form-input {
   flex: 1;
+}
+
+/* Address suggestion dropdown (Nominatim) below the search row. */
+.map-suggestions {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 20;
 }
 
 .map-canvas {

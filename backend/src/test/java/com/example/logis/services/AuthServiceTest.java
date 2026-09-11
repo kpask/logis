@@ -4,11 +4,13 @@ import com.example.logis.data.entities.Company;
 import com.example.logis.data.entities.CompanyInvitation;
 import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.enums.InvitationStatus;
+import com.example.logis.data.enums.Language;
 import com.example.logis.data.entities.User;
 import com.example.logis.dtos.requests.AddUserToCompanyRequest;
 import com.example.logis.dtos.requests.CreateInvitedUserRequest;
 import com.example.logis.dtos.requests.CreateUserRequest;
 import com.example.logis.dtos.requests.LoginRequest;
+import com.example.logis.dtos.requests.UpdateUserSettingsRequest;
 import com.example.logis.dtos.responses.LoginResponse;
 import com.example.logis.exceptions.EmailAlreadyExistsException;
 import com.example.logis.exceptions.InvalidCredentialsException;
@@ -53,6 +55,9 @@ class AuthServiceTest {
     @Mock
     private CompanyService companyService;
 
+    @Mock
+    private UserSettingsService userSettingsService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -75,7 +80,7 @@ class AuthServiceTest {
     }
 
     private static CreateInvitedUserRequest invitedRequest() {
-        return new CreateInvitedUserRequest("John", "Doe", "johndoe", "password123", TOKEN);
+        return new CreateInvitedUserRequest("John", "Doe", "johndoe", "password123", TOKEN, null);
     }
 
     // ── login ───────────────────────────────────────────────────────────
@@ -128,7 +133,7 @@ class AuthServiceTest {
         when(jwtService.generateToken(saved)).thenReturn("jwt-token");
 
         LoginResponse response = authService.register(
-                new CreateUserRequest("  John  ", " Doe ", " johndoe ", "  John@Acme.COM  ", "password123"));
+                new CreateUserRequest("  John  ", " Doe ", " johndoe ", "  John@Acme.COM  ", "password123", null));
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userService).saveUser(captor.capture());
@@ -139,6 +144,23 @@ class AuthServiceTest {
         assertThat(toSave.getEmail()).isEqualTo("john@acme.com");
         assertThat(toSave.getPasswordHash()).isEqualTo("$encoded$");
         assertThat(response.token()).isEqualTo("jwt-token");
+
+        // settings row is initialised even when no language was provided
+        verify(userSettingsService).updateSettingsByUser(1L, new UpdateUserSettingsRequest(null));
+    }
+
+    @Test
+    void register_createsUserSettings_withSelectedLanguage() {
+        when(userService.existsByEmail("john@acme.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("$encoded$");
+        User saved = user(1L);
+        when(userService.saveUser(any(User.class))).thenReturn(saved);
+        when(jwtService.generateToken(saved)).thenReturn("jwt-token");
+
+        authService.register(new CreateUserRequest(
+                "John", "Doe", "johndoe", "john@acme.com", "password123", Language.LT));
+
+        verify(userSettingsService).updateSettingsByUser(1L, new UpdateUserSettingsRequest(Language.LT));
     }
 
     @Test
@@ -146,12 +168,13 @@ class AuthServiceTest {
         when(userService.existsByEmail("john@acme.com")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.register(
-                new CreateUserRequest("John", "Doe", "johndoe", "John@Acme.com", "password123")))
+                new CreateUserRequest("John", "Doe", "johndoe", "John@Acme.com", "password123", null)))
                 .isInstanceOf(EmailAlreadyExistsException.class)
                 .hasMessageContaining("john@acme.com");
 
         verify(userService, never()).saveUser(any());
         verify(jwtService, never()).generateToken(any());
+        verify(userSettingsService, never()).updateSettingsByUser(any(), any());
     }
 
     // ── register (invited signup) ───────────────────────────────────────
@@ -172,6 +195,26 @@ class AuthServiceTest {
         verify(companyService).addUserToCompany(new AddUserToCompanyRequest(5L, false), 10L);
         assertThat(invitation.getInvitationStatus()).isEqualTo(InvitationStatus.ACCEPTED);
         assertThat(response.token()).isEqualTo("jwt-token");
+
+        // settings row is initialised even when no language was provided
+        verify(userSettingsService).updateSettingsByUser(5L, new UpdateUserSettingsRequest(null));
+    }
+
+    @Test
+    void registerInvited_createsUserSettings_withSelectedLanguage() {
+        Company company = company(10L);
+        CompanyInvitation invitation = invitation(company);
+        when(inviteService.findByToken(TOKEN)).thenReturn(invitation);
+        when(userService.existsByEmail("invitee@acme.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("$encoded$");
+        User saved = user(5L);
+        when(userService.saveUser(any(User.class))).thenReturn(saved);
+        when(jwtService.generateToken(saved)).thenReturn("jwt-token");
+
+        authService.register(new CreateInvitedUserRequest(
+                "John", "Doe", "johndoe", "password123", TOKEN, Language.LT));
+
+        verify(userSettingsService).updateSettingsByUser(5L, new UpdateUserSettingsRequest(Language.LT));
     }
 
     @Test

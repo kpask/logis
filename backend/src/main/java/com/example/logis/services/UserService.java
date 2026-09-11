@@ -47,7 +47,7 @@ public class UserService {
     public UserResponse getUserByIdAndUser(Long id, Long requesterId){
         User requester = findUser(requesterId);
         User target = findUser(id);
-        if (!AuthorizationHelper.areUsersPartOfSameCompany(requester, target)) {
+        if (!requester.getId().equals(target.getId()) && !AuthorizationHelper.areUsersPartOfSameCompany(requester, target)) {
             throw new IllegalArgumentException("User is not in the same company as the requested user");
         }
         return toResponse(target);

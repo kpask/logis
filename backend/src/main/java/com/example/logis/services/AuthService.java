@@ -7,6 +7,7 @@ import com.example.logis.dtos.requests.CreateInvitedUserRequest;
 import com.example.logis.dtos.requests.CreateUserRequest;
 import com.example.logis.dtos.requests.AddUserToCompanyRequest;
 import com.example.logis.dtos.requests.LoginRequest;
+import com.example.logis.dtos.requests.UpdateUserSettingsRequest;
 import com.example.logis.dtos.responses.LoginResponse;
 import com.example.logis.exceptions.EmailAlreadyExistsException;
 import com.example.logis.exceptions.InvalidCredentialsException;
@@ -25,13 +26,15 @@ public class AuthService {
     private final JwtService jwtService;
     private final InviteService inviteService;
     private final CompanyService companyService;
+    private final UserSettingsService userSettingsService;
 
-    public AuthService(UserService userService, InviteService inviteService, PasswordEncoder passwordEncoder, JwtService jwtService, CompanyService companyService) {
+    public AuthService(UserService userService, InviteService inviteService, PasswordEncoder passwordEncoder, JwtService jwtService, CompanyService companyService, UserSettingsService userSettingsService) {
         this.userService = userService;
         this.inviteService = inviteService;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.companyService = companyService;
+        this.userSettingsService = userSettingsService;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -46,6 +49,7 @@ public class AuthService {
         return new LoginResponse(token);
     }
 
+    @Transactional
     public LoginResponse register(CreateUserRequest request) {
         String email = request.email().trim().toLowerCase();
         if (userService.existsByEmail(email)) {
@@ -60,6 +64,10 @@ public class AuthService {
                 passwordEncoder.encode(request.password())
         );
         User savedUser = userService.saveUser(user);
+        userSettingsService.updateSettingsByUser(
+                savedUser.getId(),
+                new UpdateUserSettingsRequest(request.language())
+        );
 
         String token = jwtService.generateToken(savedUser);
         return new LoginResponse(token);
@@ -94,6 +102,11 @@ public class AuthService {
         );
 
         User savedUser = userService.saveUser(user);
+
+        userSettingsService.updateSettingsByUser(
+                savedUser.getId(),
+                new UpdateUserSettingsRequest(request.language())
+        );
 
         companyService.addUserToCompany(
                 new AddUserToCompanyRequest(savedUser.getId(), false),

@@ -41,7 +41,6 @@ export const translations = {
 
   // ── App Layout / Navigation ────────────────────────────────
   navDashboard: { EN: "Dashboard", LT: "Pagrindinis" },
-  navWorkplaces: { EN: "Workplaces", LT: "Darbo vietos" },
   navInvites: { EN: "Invites", LT: "Pakvietimai" },
   navProfile: { EN: "Profile", LT: "Profilis" },
   navSettings: { EN: "Settings", LT: "Nustatymai" },
@@ -66,6 +65,7 @@ export const translations = {
   loginCreateAccount: { EN: "Create an account", LT: "Sukurti paskyrą" },
 
   // ── Signup Page ────────────────────────────────────────────
+  signupLanguageLabel: { EN: "Language", LT: "Kalba" },
   signupTitle: { EN: "Create your account", LT: "Sukurkite savo paskyrą" },
   signupSubtitle: {
     EN: "Start tracking your work in minutes.",
@@ -259,33 +259,16 @@ export const translations = {
     LT: "Pašalinti {name} {lastname} iš {company}? Jie praras prieigą prie visų darbo vietų bei projektų, o jų priskirti projektai bus užbaigti.",
   },
 
-  // ── Workplaces Page ────────────────────────────────────────
+  // ── Workplaces (dashboard section) ─────────────────────────
   workplacesTitle: { EN: "Workplaces", LT: "Darbo vietos" },
-  workplacesCount: {
-    EN: "{count, select, 1 {# workplace} other {# workplaces}}",
-    LT: "{count, select, 1 {# darbo vieta} other {# darbo vietų}}",
-  },
-  workplacesNoCompanyTitle: {
-    EN: "You're not part of a company yet.",
-    LT: "Jūs dar nepriklausote jokiai įmonei.",
-  },
-  workplacesNoCompanyDesc: {
-    EN: "Create a company from the dashboard to start managing workplaces.",
-    LT: "Sukurkite įmonę pagrindiniame ekrane, kad pradėtumėte valdyti darbo vietas.",
-  },
   workplacesNoWorkplacesTitle: {
     EN: "No workplaces yet.",
     LT: "Darbo vietų dar nėra.",
-  },
-  workplacesNoWorkplacesDesc: {
-    EN: "Create a workplace to start organizing projects.",
-    LT: "Sukurkite darbo vietą, kad pradėtumėte organizuoti projektus.",
   },
   workplacesCreateWorkplace: {
     EN: "Create workplace",
     LT: "Sukurti darbo vietą",
   },
-  workplacesDeleteWorkplace: { EN: "Delete", LT: "Ištrinti" },
   workplacesDeleteConfirm: {
     EN: 'Delete "{name}"? This will permanently remove the workplace and all of its projects and time entries.',
     LT: "Ištrinti „{name}“? Tai negrįžtamai pašalins šią darbo vietą, visus jos projektus ir laiko įrašus.",
@@ -322,6 +305,18 @@ export const translations = {
   },
 
   // ── Workplace Page ─────────────────────────────────────────
+  workplaceStartTimerDesc: {
+    EN: "Choose the project this timer is for — time is attributed per project.",
+    LT: "Pasirinkite projektą, kuriam skiriamas šis laikmatis — laikas registruojamas projektui.",
+  },
+  workplaceAddEntryDesc: {
+    EN: "Log time for {date}. Pick the project and the worker the time is for.",
+    LT: "Registruokite laiką {date}. Pasirinkite projektą ir darbuotoją, kuriam laikas skiriamas.",
+  },
+  workplaceProjectPlaceholder: {
+    EN: "Select a project…",
+    LT: "Pasirinkite projektą…",
+  },
   workplaceNoAccessTitle: {
     EN: "You don't have access to this workplace.",
     LT: "Jūs neturite prieigos prie šios darbo vietos.",

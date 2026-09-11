@@ -5,7 +5,6 @@ import AppLayout, { type PageKey } from "./AppLayout";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
-import WorkplacesPage from "./pages/WorkplacesPage";
 import WorkplacePage from "./pages/WorkplacePage";
 import ProjectPage from "./pages/ProjectPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -107,13 +106,11 @@ function AppContent() {
     setView({ type: "app", page: "dashboard" });
   };
 
+  // Workplace/project detail views keep the Dashboard highlighted in the
+  // sidebar — the dashboard is the hub for navigating to them.
   let page: PageKey = "dashboard";
   if (view.type === "app") {
     page = view.page;
-  } else if (view.type === "workplace") {
-    page = "workplaces";
-  } else if (view.type === "project") {
-    page = "workplaces";
   }
 
   return (
@@ -125,9 +122,6 @@ function AppContent() {
     >
       {view.type === "app" && view.page === "dashboard" && (
         <DashboardPage onOpenWorkplace={handleOpenWorkplace} />
-      )}
-      {view.type === "app" && view.page === "workplaces" && (
-        <WorkplacesPage onOpenWorkplace={handleOpenWorkplace} />
       )}
       {view.type === "app" && view.page === "invites" && <InvitesPage />}
       {view.type === "app" && view.page === "profile" && <ProfilePage />}

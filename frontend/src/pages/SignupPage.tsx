@@ -3,6 +3,18 @@ import { useAuth } from "../auth";
 import { getErrorMessage } from "../api";
 import { Alert } from "../components";
 import { useI18n } from "../i18n";
+import type { Language } from "../types";
+import type { TranslationKey } from "../translations";
+
+const LANGUAGE_OPTIONS: {
+  value: Language;
+  code: string;
+  flag: string;
+  labelKey: TranslationKey;
+}[] = [
+  { value: "EN", code: "EN", flag: "🇬🇧", labelKey: "languageEnglish" },
+  { value: "LT", code: "LT", flag: "🇱🇹", labelKey: "languageLithuanian" },
+];
 
 export default function SignupPage({
   onNavigateLogin,
@@ -10,7 +22,7 @@ export default function SignupPage({
   onNavigateLogin: () => void;
 }) {
   const { register } = useAuth();
-  const { t } = useI18n();
+  const { t, language, setLanguage } = useI18n();
   const [name, setName] = useState("");
   const [lastname, setLastname] = useState("");
   const [username, setUsername] = useState("");
@@ -49,6 +61,7 @@ export default function SignupPage({
         username: username.trim(),
         email: email.trim(),
         password,
+        language,
       });
     } catch (err) {
       setError(getErrorMessage(err));
@@ -60,6 +73,30 @@ export default function SignupPage({
   return (
     <div className="auth-page">
       <div className="auth-card">
+        <div
+          className="auth-lang-switch"
+          role="group"
+          aria-label={t("signupLanguageLabel")}
+        >
+          {LANGUAGE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={
+                "auth-lang-option" +
+                (language === option.value ? " active" : "")
+              }
+              onClick={() => setLanguage(option.value, false)}
+              aria-pressed={language === option.value}
+              aria-label={t(option.labelKey)}
+              title={t(option.labelKey)}
+            >
+              <span aria-hidden="true">{option.flag}</span>
+              {option.code}
+            </button>
+          ))}
+        </div>
+
         <div className="auth-logo">
           <div className="auth-logo-icon">L</div>
           <div className="auth-logo-text">Logis</div>
