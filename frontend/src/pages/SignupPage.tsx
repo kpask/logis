@@ -121,7 +121,7 @@ export default function SignupPage({
                 id="name"
                 type="text"
                 className="form-input"
-                placeholder="Karolis"
+                placeholder={t("signupNamePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="given-name"
@@ -137,7 +137,7 @@ export default function SignupPage({
                 id="lastname"
                 type="text"
                 className="form-input"
-                placeholder="Petrauskas"
+                placeholder={t("signupLastNamePlaceholder")}
                 value={lastname}
                 onChange={(e) => setLastname(e.target.value)}
                 autoComplete="family-name"

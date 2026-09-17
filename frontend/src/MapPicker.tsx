@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import L from "./leaflet";
 import type { Location } from "./types";
 import { useI18n } from "./i18n";
 

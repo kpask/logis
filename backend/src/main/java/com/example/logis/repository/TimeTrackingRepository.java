@@ -39,4 +39,9 @@ public interface TimeTrackingRepository extends JpaRepository<TimeEntry, Long> {
             @Param("workerId") Long workerId,
             @Param("projectId") Long projectId
     );
+
+    // All time entries within a company (across every workplace and project), newest first
+    @Query("""
+    SELECT t FROM TimeEntry t WHERE t.projectWorker.project.workplace.company.id = :companyId ORDER BY t.startTime DESC""")
+    List<TimeEntry> findAllByCompanyId(@Param("companyId") Long companyId);
 }

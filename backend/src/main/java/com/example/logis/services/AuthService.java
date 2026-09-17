@@ -13,11 +13,12 @@ import com.example.logis.exceptions.EmailAlreadyExistsException;
 import com.example.logis.exceptions.InvalidCredentialsException;
 import com.example.logis.exceptions.InvalidInvitationException;
 import com.example.logis.security.JwtService;
-import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 @Service
 public class AuthService {
@@ -38,8 +39,8 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userService.findUserByEmail(request.email())
-                .orElseThrow(InvalidCredentialsException::new);
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        User user = userService.findUserByEmail(email).orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
@@ -51,7 +52,7 @@ public class AuthService {
 
     @Transactional
     public LoginResponse register(CreateUserRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
         if (userService.existsByEmail(email)) {
             throw new EmailAlreadyExistsException("User with the email " + email + " already exists.");
         }
@@ -64,7 +65,7 @@ public class AuthService {
                 passwordEncoder.encode(request.password())
         );
         User savedUser = userService.saveUser(user);
-        userSettingsService.updateSettingsByUser(
+        userSettingsService.updateSettingsForUser(
                 savedUser.getId(),
                 new UpdateUserSettingsRequest(request.language())
         );
@@ -78,7 +79,7 @@ public class AuthService {
 
         CompanyInvitation invitation = inviteService.findByToken(request.token());
 
-        String email = invitation.getEmail().trim().toLowerCase();
+        String email = invitation.getEmail().trim().toLowerCase(Locale.ROOT);
 
         if (invitation.getInvitationStatus() != InvitationStatus.PENDING) {
             throw new InvalidInvitationException("This invitation is no longer valid.");
@@ -103,7 +104,7 @@ public class AuthService {
 
         User savedUser = userService.saveUser(user);
 
-        userSettingsService.updateSettingsByUser(
+        userSettingsService.updateSettingsForUser(
                 savedUser.getId(),
                 new UpdateUserSettingsRequest(request.language())
         );

@@ -5,7 +5,7 @@ import com.example.logis.dtos.responses.InvitationResponse;
 import com.example.logis.dtos.requests.InviteUserRequest;
 import com.example.logis.services.InviteService;
 import jakarta.validation.Valid;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,26 +17,23 @@ public class InviteController {
         this.inviteService = inviteService;
     }
 
-    @GetMapping("/invites/")
-    public List<InvitationResponse> getInvites(Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return inviteService.getUserInvites(userId).stream()
+    @GetMapping("/invites")
+    public List<InvitationResponse> getInvites(@AuthenticationPrincipal User user){
+        return inviteService.getUserInvites(user.getId()).stream()
                 .map(inviteService::toResponse)
                 .toList();
     }
 
     @GetMapping("/invites/sent")
-    public List<InvitationResponse> getSentInvites(Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return inviteService.getInvitesSentBy(userId).stream()
+    public List<InvitationResponse> getSentInvites(@AuthenticationPrincipal User user){
+        return inviteService.getInvitesSentBy(user.getId()).stream()
                 .map(inviteService::toResponse)
                 .toList();
     }
 
-    @PostMapping("/invites/")
-    public InvitationResponse invite(@Valid @RequestBody InviteUserRequest request, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return inviteService.createInvitation(userId, request.email());
+    @PostMapping("/invites")
+    public InvitationResponse invite(@Valid @RequestBody InviteUserRequest request, @AuthenticationPrincipal User user){
+        return inviteService.createInvitation(user.getId(), request.email());
     }
 
     @GetMapping("/invites/{token}")
@@ -45,8 +42,7 @@ public class InviteController {
     }
 
     @PostMapping("/invites/{token}")
-    public void acceptInvite(@PathVariable String token, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        inviteService.acceptInvite(token, userId);
+    public void acceptInvite(@PathVariable String token, @AuthenticationPrincipal User user){
+        inviteService.acceptInvite(token, user.getId());
     }
 }

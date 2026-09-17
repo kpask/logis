@@ -73,6 +73,7 @@ public class UserService {
     public UserResponse updateUser(Long requesterId, UpdateUserRequest request) {
         User user = findUser(requesterId);
         user.setName(request.name() != null ? request.name() : user.getName());
+        user.setLastname(request.lastname() != null ? request.lastname() : user.getLastname());
 
         if(request.username() != null && userRepository.existsByUsername(request.username())){
             throw new UsernameAlreadyExistsException(request.username());

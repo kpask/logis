@@ -72,13 +72,23 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex){
+    @ExceptionHandler(InvalidInvitationException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidInvitation(InvalidInvitationException ex){
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(new ErrorResponse(
                         "INVALID_INVITATION_STATE",
                         ex.getMessage()
+                ));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex){
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse(
+                        "INTERNAL_SERVER_ERROR",
+                        "An unexpected error occurred."
                 ));
     }
 

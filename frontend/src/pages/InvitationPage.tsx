@@ -20,6 +20,8 @@ const LANGUAGE_OPTIONS: {
 interface InvitationPageProps {
   token: string;
   onGoToLogin: () => void;
+  /** Called after registration succeeds so the app can leave this screen. */
+  onRegistered: () => void;
 }
 
 type LoadErrorType = "not-found" | "network" | "other";
@@ -27,6 +29,7 @@ type LoadErrorType = "not-found" | "network" | "other";
 export default function InvitationPage({
   token,
   onGoToLogin,
+  onRegistered,
 }: InvitationPageProps) {
   const { registerWithInvitation } = useAuth();
   const { t, language, setLanguage } = useI18n();
@@ -122,6 +125,9 @@ export default function InvitationPage({
         token,
         language,
       });
+      // Session is now active (token stored, user set) — hand control back
+      // to App so it can navigate to the dashboard.
+      onRegistered();
     } catch (err) {
       setFormError(getErrorMessage(err));
     } finally {
@@ -231,7 +237,7 @@ export default function InvitationPage({
                     id="inv-name"
                     type="text"
                     className="form-input"
-                    placeholder="Karolis"
+                    placeholder={t("signupNamePlaceholder")}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoComplete="given-name"
@@ -246,7 +252,7 @@ export default function InvitationPage({
                     id="inv-lastname"
                     type="text"
                     className="form-input"
-                    placeholder="Petrauskas"
+                    placeholder={t("signupLastNamePlaceholder")}
                     value={lastname}
                     onChange={(e) => setLastname(e.target.value)}
                     autoComplete="family-name"
@@ -263,7 +269,7 @@ export default function InvitationPage({
                   id="inv-username"
                   type="text"
                   className="form-input"
-                  placeholder="karolis"
+                  placeholder={t("signupUsernamePlaceholder")}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"

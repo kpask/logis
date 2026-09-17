@@ -9,7 +9,7 @@ import com.example.logis.dtos.responses.UserResponse;
 import com.example.logis.services.ProjectService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,54 +22,46 @@ public class ProjectController {
         this.projectService = projectService;
     }
 
-    @PostMapping("/project")
-    public ProjectResponse createProject(@RequestBody @Valid CreateProjectRequest request, Authentication authentication){
-        Long creatorId = ((User) authentication.getPrincipal()).getId();
-        return projectService.createProject(request, creatorId);
+    @PostMapping("/projects")
+    public ProjectResponse createProject(@RequestBody @Valid CreateProjectRequest request, @AuthenticationPrincipal User user){
+        return projectService.createProject(request, user.getId());
     }
 
-    @GetMapping("/project/{id}")
-    public ProjectResponse getProject(@PathVariable long id, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return projectService.getProjectByProjectIdAntUser(id, userId);
+    @GetMapping("/projects/{id}")
+    public ProjectResponse getProject(@PathVariable long id, @AuthenticationPrincipal User user){
+        return projectService.getProjectForUser(id, user.getId());
     }
 
-    @PutMapping("/project/{id}")
-    public ProjectResponse updateProject(@PathVariable long id, @RequestBody @Valid UpdateProjectRequest request, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return projectService.updateProject(id, userId, request);
+    @PutMapping("/projects/{id}")
+    public ProjectResponse updateProject(@PathVariable long id, @RequestBody @Valid UpdateProjectRequest request, @AuthenticationPrincipal User user){
+        return projectService.updateProject(id, user.getId(), request);
     }
 
-    @DeleteMapping("/project/{id}")
+    @DeleteMapping("/projects/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteProject(@PathVariable long id, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        projectService.deleteProject(id, userId);
+    public void deleteProject(@PathVariable long id, @AuthenticationPrincipal User user){
+        projectService.deleteProject(id, user.getId());
     }
 
-    @PostMapping("/project/{id}/assign/{workerId}")
+    @PostMapping("/projects/{id}/assign/{workerId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void assignWorker(@PathVariable long id, @PathVariable long workerId, Authentication authentication){
-        Long assignerId = ((User) authentication.getPrincipal()).getId();
-        projectService.assignWorker(id, workerId, assignerId);
+    public void assignWorker(@PathVariable long id, @PathVariable long workerId, @AuthenticationPrincipal User user){
+        projectService.assignWorker(id, workerId, user.getId());
     }
 
-    @PostMapping("/project/{id}/status")
-    public ProjectResponse updateStatus(@PathVariable long id, @RequestBody @Valid UpdateProjectStatusRequest request, Authentication authentication){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return projectService.updateProjectStatus(id, request.status(), requesterId);
+    @PostMapping("/projects/{id}/status")
+    public ProjectResponse updateStatus(@PathVariable long id, @RequestBody @Valid UpdateProjectStatusRequest request, @AuthenticationPrincipal User user){
+        return projectService.updateProjectStatus(id, request.status(), user.getId());
     }
 
-    @GetMapping("/project/{id}/workers")
-    public List<UserResponse> getProjectWorkers(@PathVariable long id, Authentication authentication) {
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return projectService.getProjectWorkersByProjectIdAndUser(id, userId);
+    @GetMapping("/projects/{id}/workers")
+    public List<UserResponse> getProjectWorkers(@PathVariable long id, @AuthenticationPrincipal User user) {
+        return projectService.getProjectWorkers(id, user.getId());
     }
 
-    @DeleteMapping("/project/{id}/workers/{workerId}")
+    @DeleteMapping("/projects/{id}/workers/{workerId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeWorker(@PathVariable long id, @PathVariable long workerId, Authentication authentication) {
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        projectService.removeWorkerByProjectIdAndWorkerIdAndUser(id, workerId, requesterId);
+    public void removeWorker(@PathVariable long id, @PathVariable long workerId, @AuthenticationPrincipal User user) {
+        projectService.removeWorker(id, workerId, user.getId());
     }
 }

@@ -128,6 +128,67 @@ async function request<T>(
   return (await response.json()) as T;
 }
 
+/**
+ * Like request(), but for binary downloads (PDF/CSV exports). Returns the
+ * raw Blob; error responses are parsed as JSON exactly like request().
+ * (The Content-Disposition filename is not readable cross-origin, so the
+ * callers construct their own file names.)
+ */
+async function requestBlob(method: string, path: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { method, headers });
+  } catch {
+    throw new ApiRequestError(
+      0,
+      "NETWORK_ERROR",
+      "Unable to reach the server. Please check your connection."
+    );
+  }
+
+  if (!response.ok) {
+    let errorData: ApiError | null = null;
+    try {
+      errorData = (await response.json()) as ApiError;
+    } catch {
+      // ignore parse errors
+    }
+
+    const message =
+      errorData?.message || "Something went wrong. Please try again.";
+    const code = errorData?.error || "UNKNOWN_ERROR";
+    throw new ApiRequestError(response.status, code, message);
+  }
+
+  return await response.blob();
+}
+
+/** Trigger a browser download for a Blob and clean up afterwards. */
+export function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Export file formats supported by the worked-hours export endpoints. */
+export type ExportFormat = "pdf" | "csv";
+
+/** A downloaded export, ready to be saved via downloadBlob(). */
+export interface ExportDownload {
+  blob: Blob;
+  fileName: string;
+}
+
 // ── Auth ─────────────────────────────────────────────────────
 
 export const authApi = {
@@ -138,7 +199,7 @@ export const authApi = {
     request<LoginResponse>("POST", "/auth/register", req),
 
   registerWithInvitation: (req: CreateInvitedUserRequest) =>
-    request<LoginResponse>("POST", "/auth/register/invitation/", req),
+    request<LoginResponse>("POST", "/auth/register/invitation", req),
 };
 
 // ── Users ────────────────────────────────────────────────────
@@ -164,11 +225,11 @@ export const companiesApi = {
   create: (req: CreateCompanyRequest) =>
     request<CompanyResponse>("POST", "/company", req),
 
-  get: (_companyId?: number) => request<CompanyResponse>("GET", "/company/"),
+  get: (_companyId?: number) => request<CompanyResponse>("GET", "/company"),
 
   /** Edit the company name (owner only). */
   edit: (req: UpdateCompanyRequest) =>
-    request<CompanyResponse>("PUT", "/company/", req),
+    request<CompanyResponse>("PUT", "/company", req),
 
   /** Fetch the company settings (any member). */
   getSettings: () =>
@@ -195,14 +256,14 @@ export const companiesApi = {
   /** Transfer company ownership to another member (owner only). The
    *  former owner becomes a manager. */
   transferOwnership: (userId: number) =>
-    request<void>("PUT", `/owner/${userId}`),
+    request<void>("PUT", `/company/owner/${userId}`),
 };
 
 // ── Workplaces ───────────────────────────────────────────────
 
 export const workplacesApi = {
   create: (req: CreateWorkplaceRequest) =>
-    request<WorkplaceResponse>("POST", "/workplace", req),
+    request<WorkplaceResponse>("POST", "/workplaces", req),
 
   get: (id: number) => request<WorkplaceResponse>("GET", `/workplaces/${id}`),
 
@@ -227,33 +288,33 @@ export const workplacesApi = {
 
 export const projectsApi = {
   create: (req: CreateProjectRequest) =>
-    request<ProjectResponse>("POST", "/project", req),
+    request<ProjectResponse>("POST", "/projects", req),
 
-  get: (id: number) => request<ProjectResponse>("GET", `/project/${id}`),
+  get: (id: number) => request<ProjectResponse>("GET", `/projects/${id}`),
 
   /** Update a project's name/start date/deadline (managers only). */
   update: (id: number, req: UpdateProjectRequest) =>
-    request<ProjectResponse>("PUT", `/project/${id}`, req),
+    request<ProjectResponse>("PUT", `/projects/${id}`, req),
 
   updateStatus: (projectId: number, status: ProjectStatus) =>
-    request<ProjectResponse>("POST", `/project/${projectId}/status`, {
+    request<ProjectResponse>("POST", `/projects/${projectId}/status`, {
       status,
     }),
 
   /** Workers assigned to the project (scoped to the requesting user). */
   getWorkers: (projectId: number) =>
-    request<UserResponse[]>("GET", `/project/${projectId}/workers`),
+    request<UserResponse[]>("GET", `/projects/${projectId}/workers`),
 
   /** Assign a company member to the project (managers only). */
   assignWorker: (projectId: number, workerId: number) =>
-    request<void>("POST", `/project/${projectId}/assign/${workerId}`),
+    request<void>("POST", `/projects/${projectId}/assign/${workerId}`),
 
   /** Remove a worker from the project (managers only). */
   removeWorker: (projectId: number, workerId: number) =>
-    request<void>("DELETE", `/project/${projectId}/workers/${workerId}`),
+    request<void>("DELETE", `/projects/${projectId}/workers/${workerId}`),
 
   /** Delete a project and all of its data (managers only). */
-  delete: (id: number) => request<void>("DELETE", `/project/${id}`),
+  delete: (id: number) => request<void>("DELETE", `/projects/${id}`),
 };
 
 // ── Invitations ──────────────────────────────────────────────
@@ -265,10 +326,10 @@ export const invitationsApi = {
   accept: (token: string) => request<void>("POST", `/invites/${token}`),
 
   invite: (req: InviteUserRequest) =>
-    request<InvitationResponse>("POST", "/invites/", req),
+    request<InvitationResponse>("POST", "/invites", req),
 
   /** Invitations addressed to the logged-in user. */
-  getMine: () => request<InvitationResponse[]>("GET", "/invites/"),
+  getMine: () => request<InvitationResponse[]>("GET", "/invites"),
 
   /** Invitations the logged-in user (manager) has sent. */
   getSent: () => request<InvitationResponse[]>("GET", "/invites/sent"),
@@ -382,7 +443,103 @@ export const timeTrackingApi = {
       "GET",
       `/workplaces/${workplaceId}/time-worked`
     ),
+
+  /**
+   * Per-user, per-day worked time for the whole company (managers only).
+   * Optional from/to are ISO instants.
+   */
+  getCompanyTimeWorked: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const query = qs.toString();
+    return request<TimeWorkedResponse[]>(
+      "GET",
+      `/company/time-worked${query ? `?${query}` : ""}`
+    );
+  },
+
+  /**
+   * Download the logged-in user's worked hours as PDF or CSV. Optional
+   * year/month limits the report to one calendar month (evaluated in the
+   * company timezone); omitting both exports all recorded time.
+   */
+  exportMyTimeWorked: async (
+    format: ExportFormat,
+    year?: number,
+    month?: number
+  ): Promise<ExportDownload> => {
+    const qs = new URLSearchParams();
+    if (year != null) qs.set("year", String(year));
+    if (month != null) qs.set("month", String(month));
+    qs.set("format", format);
+    const blob = await requestBlob(
+      "GET",
+      `/me/time-worked/export?${qs.toString()}`
+    );
+    return {
+      blob,
+      fileName: exportFileName("hours", period(year, month), format),
+    };
+  },
+
+  /**
+   * Download a company member's worked hours as PDF or CSV. Managers may
+   * export any member of their company; regular users only themselves.
+   */
+  exportUserTimeWorked: async (
+    userId: number,
+    format: ExportFormat,
+    year?: number,
+    month?: number
+  ): Promise<ExportDownload> => {
+    const qs = new URLSearchParams();
+    if (year != null) qs.set("year", String(year));
+    if (month != null) qs.set("month", String(month));
+    qs.set("format", format);
+    const blob = await requestBlob(
+      "GET",
+      `/time-worked/${userId}/export?${qs.toString()}`
+    );
+    return {
+      blob,
+      fileName: exportFileName(`hours-${userId}`, period(year, month), format),
+    };
+  },
+
+  /**
+   * Download every member's worked hours as PDF or CSV (managers only).
+   * Optional year/month limits the report to one calendar month.
+   */
+  exportCompanyTimeWorked: async (
+    format: ExportFormat,
+    year?: number,
+    month?: number
+  ): Promise<ExportDownload> => {
+    const qs = new URLSearchParams();
+    if (year != null) qs.set("year", String(year));
+    if (month != null) qs.set("month", String(month));
+    qs.set("format", format);
+    const blob = await requestBlob(
+      "GET",
+      `/company/time-worked/export?${qs.toString()}`
+    );
+    return {
+      blob,
+      fileName: exportFileName("hours-everyone", period(year, month), format),
+    };
+  },
 };
+
+function period(year?: number, month?: number): string {
+  return year != null && month != null
+    ? `${year}-${String(month).padStart(2, "0")}`
+    : "all";
+}
+
+function exportFileName(base: string, period: string, format: string): string {
+  return `${base}-${period}.${format}`;
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 

@@ -8,6 +8,7 @@ import com.example.logis.data.entities.User;
 import com.example.logis.dtos.requests.AddUserToCompanyRequest;
 import com.example.logis.dtos.responses.InvitationResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
+import com.example.logis.exceptions.InvalidInvitationException;
 import com.example.logis.exceptions.InvitationNotFoundException;
 import com.example.logis.repository.InviteRepository;
 import org.junit.jupiter.api.Test;
@@ -175,7 +176,7 @@ class InviteServiceTest {
                 .thenReturn(Optional.of(invitation));
 
         assertThatThrownBy(() -> inviteService.acceptInvite(TOKEN, 5L))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(InvalidInvitationException.class)
                 .hasMessageContaining("no longer valid");
 
         verify(companyService, never()).addUserToCompany(any(), any());
@@ -193,7 +194,7 @@ class InviteServiceTest {
                 .thenReturn(Optional.of(invitation));
 
         assertThatThrownBy(() -> inviteService.acceptInvite(TOKEN, 5L))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(InvalidInvitationException.class);
 
         assertThat(invitation.getInvitationStatus())
                 .isEqualTo(InvitationStatus.EXPIRED);

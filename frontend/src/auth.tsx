@@ -79,7 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(TOKEN_KEY, token);
     setAuthToken(token);
 
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    // JWT segments are base64url-encoded; atob only understands standard
+    // base64, so restore the +/- characters before decoding.
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(base64));
     const userId = payload.userId as number;
     localStorage.setItem(USER_ID_KEY, String(userId));
 

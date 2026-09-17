@@ -25,13 +25,13 @@ public class UserSettingsService {
                 .orElseGet(() -> userSettingsRepository.save(new UserSettings(user)));
     }
 
-    @Transactional
-    public UserSettingsResponse getSettingsByUser(Long userId) {
+    @Transactional(readOnly = true)
+    public UserSettingsResponse getSettingsForUser(Long userId) {
         return toResponse(getOrCreate(userId));
     }
 
     @Transactional
-    public UserSettingsResponse updateSettingsByUser(Long userId, UpdateUserSettingsRequest request) {
+    public UserSettingsResponse updateSettingsForUser(Long userId, UpdateUserSettingsRequest request) {
         UserSettings settings = getOrCreate(userId);
         settings.setLanguage(request.language());
         return toResponse(userSettingsRepository.save(settings));

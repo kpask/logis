@@ -3,13 +3,14 @@ package com.example.logis.services;
 import com.example.logis.data.entities.CompanyInvitation;
 import com.example.logis.data.entities.User;
 import com.example.logis.data.enums.InvitationStatus;
+import com.example.logis.exceptions.InvalidInvitationException;
 import com.example.logis.dtos.requests.AddUserToCompanyRequest;
 import com.example.logis.dtos.responses.InvitationResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.InvitationNotFoundException;
 import com.example.logis.repository.InviteRepository;
 import com.example.logis.util.AuthorizationHelper;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -71,11 +72,11 @@ public class InviteService {
         User accepter = userService.findUser(accepterId);
         CompanyInvitation invitation = findByToken(token);
         if(!invitation.getInvitationStatus().equals(InvitationStatus.PENDING)){
-            throw new IllegalStateException("Invitation is no longer valid");
+            throw new InvalidInvitationException("Invitation is no longer valid");
         }
         if(invitation.getExpiresAt().isBefore(LocalDateTime.now())){
             invitation.setInvitationStatus(InvitationStatus.EXPIRED);
-            throw new IllegalStateException("Invitation has expired");
+            throw new InvalidInvitationException("Invitation has expired");
         }
         if(accepter.getCompany() != null){
             throw new ForbiddenActionException("You are already part of a company and cannot accept this invitation.");

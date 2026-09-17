@@ -30,7 +30,7 @@ public class AuthController {
         return authService.register(request);
     }
 
-    @PostMapping("register/invitation/")
+    @PostMapping("/register/invitation")
     public LoginResponse registerWithInvitation(@Valid @RequestBody CreateInvitedUserRequest request){
         return authService.register(request);
     }

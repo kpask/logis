@@ -10,8 +10,8 @@ import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.exceptions.WorkplaceNotFoundException;
 import com.example.logis.repository.WorkplaceRepository;
 import com.example.logis.util.AuthorizationHelper;
-import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -66,8 +66,8 @@ public class WorkplaceService {
                 .orElseThrow(() -> new WorkplaceNotFoundException(workplaceId));
     }
 
-    @Transactional
-    public List<WorkplaceResponse> getWorkplacesByUser(Long userId) {
+    @Transactional(readOnly = true)
+    public List<WorkplaceResponse> getWorkplacesForUser(Long userId) {
         User authenticatedUser = userService.findUser(userId);
 
         if(authenticatedUser.getCompany() == null){
@@ -79,22 +79,11 @@ public class WorkplaceService {
                 .toList();
     }
 
-    @Transactional
-    public List<WorkplaceResponse> getWorkplacesByCompanyId(long id) {
-        return companyService.findCompany(id).getWorkplaces().stream()
-                .map(this::toResponse)
-                .toList();
-    }
-
-    public WorkplaceResponse getWorkplaceByWorkplaceId(Long id) {
-        Workplace workplace = findWorkplace(id);
-        return toResponse(workplace);
-    }
-
-    public WorkplaceResponse getWorkplaceByWorkplaceIdAndUser(Long id, Long userId) {
+    @Transactional(readOnly = true)
+    public WorkplaceResponse getWorkplaceForUser(Long id, Long userId) {
         User user = userService.findUser(userId);
         Workplace workplace = findWorkplace(id);
-        if (!workplace.getCompany().getId().equals(user.getCompany().getId())) {
+        if (!AuthorizationHelper.isWorkplaceOwnedByCompany(workplace, user.getCompany())) {
             throw new ForbiddenActionException("User " + user.getId() + " is not part of the company that owns workplace " + id);
         }
 
@@ -119,9 +108,9 @@ public class WorkplaceService {
     }
 
     @Transactional
-    public void deleteWorkplaceByWorkplaceIdAndUser(Long id, Long userId) {
+    public void deleteWorkplaceForUser(Long workplaceId, Long userId) {
         User user = userService.findUser(userId);
-        Workplace workplace = findWorkplace(id);
+        Workplace workplace = findWorkplace(workplaceId);
         if(!AuthorizationHelper.canModifyWorkplace(user, workplace)) {
             throw new ForbiddenActionException("User " + user.getId() + " is not allowed to delete workplace " + workplace.getId());
         }

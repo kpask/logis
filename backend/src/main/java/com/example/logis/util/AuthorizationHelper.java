@@ -25,7 +25,17 @@ public final class AuthorizationHelper {
     }
 
     public static boolean isWorkplaceOwnedByCompany(Workplace workplace, Company company) {
+        if(workplace == null || company == null){
+            return false;
+        }
         return workplace.getCompany().getId().equals(company.getId());
+    }
+
+    public static boolean isProjectOwnedByCompany(Project project, Company company) {
+        if(project == null || company == null){
+            return false;
+        }
+        return isWorkplaceOwnedByCompany(project.getWorkplace(), company);
     }
 
     public static boolean canModifyProject(User user, Project project) {

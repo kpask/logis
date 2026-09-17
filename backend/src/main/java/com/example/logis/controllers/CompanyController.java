@@ -12,7 +12,7 @@ import com.example.logis.services.CompanySettingsService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,72 +28,60 @@ public class CompanyController {
     }
 
     @PostMapping("/company")
-    public CompanyResponse createCompany(@RequestBody @Valid CreateCompanyRequest request, Authentication authentication){
-        Long creatorId = ((User) authentication.getPrincipal()).getId();
-        return companyService.createCompany(request, creatorId);
+    public CompanyResponse createCompany(@RequestBody @Valid CreateCompanyRequest request, @AuthenticationPrincipal User user){
+        return companyService.createCompany(request, user.getId());
     }
 
-    @GetMapping("/company/")
-    public CompanyResponse getCompany(Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return companyService.getCompanyByUser(userId);
+    @GetMapping("/company")
+    public CompanyResponse getCompany(@AuthenticationPrincipal User user){
+        return companyService.getCompanyForUser(user.getId());
     }
 
-    @PutMapping("/company/")
-    public CompanyResponse editCompany(@RequestBody @Valid UpdateCompanyRequest request, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return companyService.updateCompany(userId, request);
+    @PutMapping("/company")
+    public CompanyResponse editCompany(@RequestBody @Valid UpdateCompanyRequest request, @AuthenticationPrincipal User user){
+        return companyService.updateCompany(user.getId(), request);
     }
 
     @PostMapping("/company/manager/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void promote(@PathVariable @Positive long id, Authentication authentication){
-        Long promoterId = ((User) authentication.getPrincipal()).getId();
-        companyService.makeCompanyManager(id, promoterId);
+    public void promote(@PathVariable @Positive long id, @AuthenticationPrincipal User user){
+        companyService.makeCompanyManager(id, user.getId());
     }
 
     @DeleteMapping("/company/manager/{id}")
-    public UserResponse demote(@PathVariable @Positive long id, Authentication authentication){
-        Long promoterId = ((User) authentication.getPrincipal()).getId();
-        return companyService.demote(id, promoterId);
+    public UserResponse demote(@PathVariable @Positive long id, @AuthenticationPrincipal User user){
+        return companyService.demote(id, user.getId());
     }
 
-    @PutMapping("/owner/{id}")
+    @PutMapping("/company/owner/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void transferOwnership(@PathVariable @Positive long id, Authentication authentication){
-        Long formerOwnerId = ((User) authentication.getPrincipal()).getId();
-        companyService.transferOwnership(id, formerOwnerId);
+    public void transferOwnership(@PathVariable @Positive long id, @AuthenticationPrincipal User user){
+        companyService.transferOwnership(id, user.getId());
     }
 
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/company/kick/{id}")
-    public void kick(Authentication authentication, @PathVariable @Positive long id){
-        User user = (User) authentication.getPrincipal();
+    public void kick(@PathVariable @Positive long id, @AuthenticationPrincipal User user){
         companyService.kick(id, user.getId());
     }
 
-
-    @GetMapping("/company/workerCount")
-    public int getWorkerCount(Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return companyService.getWorkerCountByUser(userId);
+    @GetMapping("/company/worker-count")
+    public int getWorkerCount(@AuthenticationPrincipal User user){
+        return companyService.getWorkerCountForUser(user.getId());
     }
 
     @GetMapping("/company/members")
-    public List<UserResponse> getMembers(Authentication authentication){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return companyService.getMembersByUser(requesterId);
+    public List<UserResponse> getMembers(@AuthenticationPrincipal User user){
+        return companyService.getMembersForUser(user.getId());
     }
 
     @GetMapping("/company/settings")
-    public CompanySettingsResponse getCompanySettings(Authentication authentication){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return companySettingsService.getSettingsByUser(requesterId);
+    public CompanySettingsResponse getCompanySettings(@AuthenticationPrincipal User user){
+        return companySettingsService.getSettingsForUser(user.getId());
     }
 
     @PutMapping("/company/settings")
-    public CompanySettingsResponse updateCompanySettings(@RequestBody @Valid UpdateCompanySettingsRequest request, Authentication authentication){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return companySettingsService.updateSettingsByUser(requesterId, request);
+    public CompanySettingsResponse updateCompanySettings(@RequestBody @Valid UpdateCompanySettingsRequest request, @AuthenticationPrincipal User user){
+        return companySettingsService.updateSettingsForUser(user.getId(), request);
     }
 }

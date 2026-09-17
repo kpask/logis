@@ -41,7 +41,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/register/invitation/**").permitAll()
                         // Listing invites (mine / sent by me) requires auth — must be
                         // declared before the public token rule below
-                        .requestMatchers(HttpMethod.GET, "/invites/", "/invites/sent").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/invites", "/invites/sent").authenticated()
                         // Viewing an invitation by token is public; accepting it requires auth
                         .requestMatchers(HttpMethod.GET, "/invites/*").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
@@ -55,7 +55,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("http://*:5173"));
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:5173",
+                "http://localhost",
+                "http://158.179.202.161"
+        ));
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

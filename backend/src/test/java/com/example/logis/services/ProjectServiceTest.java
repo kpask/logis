@@ -166,33 +166,33 @@ class ProjectServiceTest {
     }
 
     @Test
-    void getProjectByProjectIdAntUser_returnsProject_whenUserBelongsToCompany() {
+    void getProjectForUser_returnsProject_whenUserBelongsToCompany() {
         Company company = company(10L);
         User user = member(2L, company);
         Project project = project(30L, workplace(20L, company));
         when(userService.findUser(2L)).thenReturn(user);
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project));
 
-        ProjectResponse response = projectService.getProjectByProjectIdAntUser(30L, 2L);
+        ProjectResponse response = projectService.getProjectForUser(30L, 2L);
 
         assertThat(response.id()).isEqualTo(30L);
     }
 
     @Test
-    void getProjectByProjectIdAntUser_throwsForbidden_whenUserIsOutsider() {
+    void getProjectForUser_throwsForbidden_whenUserIsOutsider() {
         Company company = company(10L);
-        User outsider = user(2L, CompanyRole.USER, company); // not in company.getUsers()
+        User outsider = user(2L, CompanyRole.USER, company(99L));
         Project project = project(30L, workplace(20L, company));
         when(userService.findUser(2L)).thenReturn(outsider);
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project));
 
-        assertThatThrownBy(() -> projectService.getProjectByProjectIdAntUser(30L, 2L))
+        assertThatThrownBy(() -> projectService.getProjectForUser(30L, 2L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("not part of the company");
     }
 
     @Test
-    void getWorkplaceProjectsByWorkplaceIdAndUser_returnsOnlyActiveAssignments_forRegularMember() {
+    void getWorkplaceProjectsForUser_returnsOnlyActiveAssignments_forRegularMember() {
         Company company = company(10L);
         User user = member(2L, company);
         Workplace workplace = workplace(20L, company);
@@ -202,7 +202,7 @@ class ProjectServiceTest {
         when(projectWorkerRepository.findByWorker_IdAndProject_Workplace_IdAndEndDateIsNull(2L, 20L))
                 .thenReturn(List.of(projectWorker(40L, user, assigned, null)));
 
-        List<ProjectResponse> projects = projectService.getWorkplaceProjectsByWorkplaceIdAndUser(20L, 2L);
+        List<ProjectResponse> projects = projectService.getWorkplaceProjectsForUser(20L, 2L);
 
         assertThat(projects).hasSize(1);
         assertThat(projects.get(0).id()).isEqualTo(30L);
@@ -210,7 +210,7 @@ class ProjectServiceTest {
     }
 
     @Test
-    void getWorkplaceProjectsByWorkplaceIdAndUser_returnsAllProjects_forManager() {
+    void getWorkplaceProjectsForUser_returnsAllProjects_forManager() {
         Company company = company(10L);
         User manager = manager(1L, company);
         Workplace workplace = workplace(20L, company);
@@ -219,7 +219,7 @@ class ProjectServiceTest {
         when(workplaceService.findWorkplace(20L)).thenReturn(workplace);
         when(projectRepository.findByWorkplace_Id(20L)).thenReturn(List.of(project));
 
-        List<ProjectResponse> projects = projectService.getWorkplaceProjectsByWorkplaceIdAndUser(20L, 1L);
+        List<ProjectResponse> projects = projectService.getWorkplaceProjectsForUser(20L, 1L);
 
         assertThat(projects).hasSize(1);
         assertThat(projects.get(0).id()).isEqualTo(30L);
@@ -227,13 +227,13 @@ class ProjectServiceTest {
     }
 
     @Test
-    void getWorkplaceProjectsByWorkplaceIdAndUser_throwsForbidden_whenUserIsOutsider() {
+    void getWorkplaceProjectsForUser_throwsForbidden_whenUserIsOutsider() {
         Company company = company(10L);
-        User outsider = user(2L, CompanyRole.USER, company); // not in company.getUsers()
+        User outsider = user(2L, CompanyRole.USER, company(99L));
         when(userService.findUser(2L)).thenReturn(outsider);
         when(workplaceService.findWorkplace(20L)).thenReturn(workplace(20L, company));
 
-        assertThatThrownBy(() -> projectService.getWorkplaceProjectsByWorkplaceIdAndUser(20L, 2L))
+        assertThatThrownBy(() -> projectService.getWorkplaceProjectsForUser(20L, 2L))
                 .isInstanceOf(ForbiddenActionException.class);
     }
 
@@ -357,17 +357,20 @@ class ProjectServiceTest {
     // ── project workers ─────────────────────────────────────────────────
 
     @Test
-    void getProjectWorkersByProjectIdAndUser_returnsOnlyActiveWorkers() {
+    void getProjectWorkers_returnsOnlyActiveWorkers() {
         Company company = company(10L);
         User viewer = member(2L, company);
         Project project = project(30L, workplace(20L, company));
-        ProjectWorker active = projectWorker(40L, member(3L, company), project, null);
+        User activeWorker = member(3L, company);
+        ProjectWorker active = projectWorker(40L, activeWorker, project, null);
         ProjectWorker removed = projectWorker(41L, member(4L, company), project, LocalDate.now().minusDays(1));
         when(userService.findUser(2L)).thenReturn(viewer);
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project));
         when(projectWorkerRepository.findByProject_Id(30L)).thenReturn(List.of(active, removed));
+        when(userService.toResponse(activeWorker)).thenReturn(
+                new UserResponse(3L, "John", "Doe", "johndoe", "john3@acme.com", CompanyRole.USER, 10L));
 
-        List<UserResponse> workers = projectService.getProjectWorkersByProjectIdAndUser(30L, 2L);
+        List<UserResponse> workers = projectService.getProjectWorkers(30L, 2L);
 
         assertThat(workers).hasSize(1);
         assertThat(workers.get(0).id()).isEqualTo(3L);
@@ -387,7 +390,7 @@ class ProjectServiceTest {
         when(companyService.findCompany(10L)).thenReturn(company);
         when(projectWorkerRepository.findByProject_IdAndWorker_Id(30L, 2L)).thenReturn(Optional.of(assignment));
 
-        projectService.removeWorkerByProjectIdAndWorkerIdAndUser(30L, 2L, 1L);
+        projectService.removeWorker(30L, 2L, 1L);
 
         assertThat(assignment.getEndDate()).isEqualTo(LocalDate.now());
         verify(projectWorkerRepository).save(assignment);
@@ -400,7 +403,7 @@ class ProjectServiceTest {
         when(userService.findUser(1L)).thenReturn(requester);
         when(projectRepository.findById(30L)).thenReturn(Optional.of(project(30L, workplace(20L, company))));
 
-        assertThatThrownBy(() -> projectService.removeWorkerByProjectIdAndWorkerIdAndUser(30L, 1L, 1L))
+        assertThatThrownBy(() -> projectService.removeWorker(30L, 1L, 1L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("remove himself");
     }
@@ -414,7 +417,7 @@ class ProjectServiceTest {
         when(companyService.findCompany(10L)).thenReturn(company);
         when(projectWorkerRepository.findByProject_IdAndWorker_Id(30L, 2L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> projectService.removeWorkerByProjectIdAndWorkerIdAndUser(30L, 2L, 1L))
+        assertThatThrownBy(() -> projectService.removeWorker(30L, 2L, 1L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("not assigned");
     }

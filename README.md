@@ -2,6 +2,9 @@
 
 A work in progress workplace and project management platform that helps teams collaborate, track time, and manage projects across multiple locations.
 
+**Live demo**: [http://158.179.202.161/](http://158.179.202.161/)  
+Please note: Geolocation functionality is temporarily unavailable pending HTTPS configuration.
+
 ## Features
 
 - **User Authentication**: Secure login/signup with JWT-based authentication
@@ -43,13 +46,33 @@ A work in progress workplace and project management platform that helps teams co
 
 ## Getting Started
 
-### 1. Clone the Repository
+### Option A: Docker (recommended)
+
+The fastest way to run the full stack (PostgreSQL + backend + frontend) is Docker Compose:
+
+```bash
+cp .env.template .env
+```
+
+Edit `.env` and set your own database credentials and JWT secret, then:
+
+```bash
+docker compose up -d
+```
+
+- Frontend: `http://localhost`
+- Backend API: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+
+### Option B: Local development
+
+#### 1. Clone the Repository
 
 ```bash
 cd /path/to/workis
 ```
 
-### 2. Backend Setup
+#### 2. Backend Setup
 
 Navigate to the backend directory:
 
@@ -76,7 +99,7 @@ The API will be available at `http://localhost:8080`
 
 **API Documentation**: Visit `http://localhost:8080/swagger-ui.html` for interactive API docs.
 
-### 3. Frontend Setup
+#### 3. Frontend Setup
 
 In a new terminal, navigate to the frontend directory:
 
@@ -98,7 +121,7 @@ npm run dev
 
 The frontend will be available at `http://localhost:5173`
 
-### 4. Access the Application
+#### 4. Access the Application
 
 Open your browser and navigate to `http://localhost:5173`
 
@@ -111,36 +134,48 @@ Open your browser and navigate to `http://localhost:5173`
 
 - `POST /auth/login` - Login with email and password
 - `POST /auth/register` - Create a new user account
-- `POST /auth/register/invitation/` - Register a new user via invitation link
+- `POST /auth/register/invitation` - Register a new user via invitation link
 
 ### Users
 
 - `GET /user/{id}` - Get user profile by ID
+- `PUT /user` - Update the authenticated user's profile
+- `GET /me/settings` - Get the authenticated user's settings
+- `PUT /me/settings` - Update the authenticated user's settings
 
 ### Company
 
 - `POST /company` - Create a new company
+- `GET /company` - Get the authenticated user's company
+- `PUT /company` - Update the company
 - `POST /company/manager/{id}` - Promote a user to company manager
-- `GET /company/` - Get the authenticated user's company
-- `GET /company/workerCount` - Get total number of workers in the company
+- `DELETE /company/manager/{id}` - Demote a manager back to a regular worker
+- `PUT /company/owner/{id}` - Transfer company ownership to another member
+- `POST /company/kick/{id}` - Remove a member from the company
+- `GET /company/worker-count` - Get total number of workers in the company
 - `GET /company/members` - Get list of all company members
+- `GET /company/settings` - Get the company settings
+- `PUT /company/settings` - Update the company settings
 
 ### Workplaces
 
-- `POST /workplace` - Create a new workplace
+- `POST /workplaces` - Create a new workplace
 - `GET /workplaces` - Get all workplaces for the authenticated user's company
 - `GET /workplaces/{id}` - Get a specific workplace
 - `GET /workplaces/{id}/projects` - Get all projects in a workplace
+- `PUT /workplaces/{id}` - Update a workplace
 - `DELETE /workplaces/{id}` - Delete a workplace
 
 ### Projects
 
-- `POST /project` - Create a new project
-- `GET /project/{id}` - Get project details
-- `POST /project/{id}/assign/{workerId}` - Assign a worker to a project
-- `POST /project/{id}/status` - Update project status
-- `GET /project/{id}/workers` - Get all workers assigned to a project
-- `DELETE /project/{id}/workers/{workerId}` - Remove a worker from a project
+- `POST /projects` - Create a new project
+- `GET /projects/{id}` - Get project details
+- `PUT /projects/{id}` - Update a project
+- `DELETE /projects/{id}` - Delete a project
+- `POST /projects/{id}/assign/{workerId}` - Assign a worker to a project
+- `POST /projects/{id}/status` - Update project status
+- `GET /projects/{id}/workers` - Get all workers assigned to a project
+- `DELETE /projects/{id}/workers/{workerId}` - Remove a worker from a project
 
 ### Time Tracking
 
@@ -148,16 +183,25 @@ Open your browser and navigate to `http://localhost:5173`
 - `POST /me/time-entries/{id}/stop` - Stop an active time entry
 - `POST /projects/{projectId}/time-entries` - Create a manual project time entry
 - `GET /me/time-entries` - Get the authenticated user's time entries
+- `GET /time-entries/{userId}` - Get a company member's time entries
 - `GET /projects/{projectId}/time-entries` - Get all time entries for a project
 - `GET /workplaces/{workplaceId}/time-entries` - Get all time entries for a workplace
 - `PUT /time-entries/{id}` - Update a time entry
 - `DELETE /time-entries/{id}` - Delete a time entry
+- `GET /me/time-worked` - Get the authenticated user's per-day worked time
+- `GET /time-worked/{userId}` - Get a company member's per-day worked time
+- `GET /projects/{projectId}/time-worked` - Get per-user, per-day worked time for a project
+- `GET /workplaces/{workplaceId}/time-worked` - Get per-user, per-day worked time for a workplace
+- `GET /company/time-worked` - Get per-user, per-day worked time for the whole company
+- `GET /me/time-worked/export` - Export the authenticated user's worked hours (PDF/CSV)
+- `GET /time-worked/{userId}/export` - Export a company member's worked hours (PDF/CSV)
+- `GET /company/time-worked/export` - Export every member's worked hours (PDF/CSV)
 
 ### Invitations
 
-- `GET /invites/` - Get all invitations received by the user
+- `GET /invites` - Get all invitations received by the user
 - `GET /invites/sent` - Get all invitations sent by the user
-- `POST /invites/` - Send an invitation to a user
+- `POST /invites` - Send an invitation to a user
 - `GET /invites/{token}` - Get invitation details by token
 - `POST /invites/{token}` - Accept an invitation
 

@@ -146,7 +146,7 @@ class AuthServiceTest {
         assertThat(response.token()).isEqualTo("jwt-token");
 
         // settings row is initialised even when no language was provided
-        verify(userSettingsService).updateSettingsByUser(1L, new UpdateUserSettingsRequest(null));
+        verify(userSettingsService).updateSettingsForUser(1L, new UpdateUserSettingsRequest(null));
     }
 
     @Test
@@ -160,7 +160,7 @@ class AuthServiceTest {
         authService.register(new CreateUserRequest(
                 "John", "Doe", "johndoe", "john@acme.com", "password123", Language.LT));
 
-        verify(userSettingsService).updateSettingsByUser(1L, new UpdateUserSettingsRequest(Language.LT));
+        verify(userSettingsService).updateSettingsForUser(1L, new UpdateUserSettingsRequest(Language.LT));
     }
 
     @Test
@@ -174,7 +174,7 @@ class AuthServiceTest {
 
         verify(userService, never()).saveUser(any());
         verify(jwtService, never()).generateToken(any());
-        verify(userSettingsService, never()).updateSettingsByUser(any(), any());
+        verify(userSettingsService, never()).updateSettingsForUser(any(), any());
     }
 
     // ── register (invited signup) ───────────────────────────────────────
@@ -197,7 +197,7 @@ class AuthServiceTest {
         assertThat(response.token()).isEqualTo("jwt-token");
 
         // settings row is initialised even when no language was provided
-        verify(userSettingsService).updateSettingsByUser(5L, new UpdateUserSettingsRequest(null));
+        verify(userSettingsService).updateSettingsForUser(5L, new UpdateUserSettingsRequest(null));
     }
 
     @Test
@@ -214,7 +214,7 @@ class AuthServiceTest {
         authService.register(new CreateInvitedUserRequest(
                 "John", "Doe", "johndoe", "password123", TOKEN, Language.LT));
 
-        verify(userSettingsService).updateSettingsByUser(5L, new UpdateUserSettingsRequest(Language.LT));
+        verify(userSettingsService).updateSettingsForUser(5L, new UpdateUserSettingsRequest(Language.LT));
     }
 
     @Test

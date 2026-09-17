@@ -15,9 +15,9 @@ import com.example.logis.repository.CompanyRepository;
 import com.example.logis.repository.ProjectWorkerRepository;
 import com.example.logis.repository.UserRepository;
 import com.example.logis.util.AuthorizationHelper;
-import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.Positive;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -45,8 +45,8 @@ public class CompanyService {
         return toResponse(company);
     }
 
-    @Transactional
-    public CompanyResponse getCompanyByUser(Long userId){
+    @Transactional(readOnly = true)
+    public CompanyResponse getCompanyForUser(Long userId){
         User user = userService.findUser(userId);
         if(user.getCompany() == null){
             throw new IllegalArgumentException("User is not associated with any company");
@@ -78,6 +78,9 @@ public class CompanyService {
     public void makeCompanyManager(Long id, Long promoterId){
         User promoter = userService.findUser(promoterId);
         User newManager = userService.findUser(id);
+        if(promoter.getId().equals(newManager.getId())){
+            throw new IllegalArgumentException("You cannot change your role.");
+        }
         if(!promoter.getRole().equals(CompanyRole.OWNER)){
             throw new ForbiddenActionException("Only owners can promote users to manager role");
         }
@@ -89,11 +92,15 @@ public class CompanyService {
 
     @Transactional
     public CompanyResponse createCompany(CreateCompanyRequest request, Long managerId) {
-        User manager = userService.findUser(managerId);
+        User creator = userService.findUser(managerId);
+        if(creator.getCompany() != null){
+            throw new IllegalArgumentException("User is already in a company");
+        }
+
         Company savedCompany = companyRepository.save(new Company(request.name()));
-        manager.setCompany(savedCompany);
-        manager.setRole(CompanyRole.OWNER);
-        userRepository.save(manager);
+        creator.setCompany(savedCompany);
+        creator.setRole(CompanyRole.OWNER);
+        userRepository.save(creator);
         return toResponse(savedCompany);
     }
 
@@ -101,7 +108,8 @@ public class CompanyService {
         return userRepository.countByCompanyId(companyId);
     }
 
-    public int getWorkerCountByUser(Long userId){
+    @Transactional(readOnly = true)
+    public int getWorkerCountForUser(Long userId){
         User user = userService.findUser(userId);
         if(user.getCompany() == null){
             throw new IllegalArgumentException("User is not associated with any company");
@@ -120,8 +128,8 @@ public class CompanyService {
         return new CompanyResponse(company.getId(), company.getName());
     }
 
-    @Transactional
-    public List<UserResponse> getMembersByUser(Long requesterId) {
+    @Transactional(readOnly = true)
+    public List<UserResponse> getMembersForUser(Long requesterId) {
         User requester = userService.findUser(requesterId);
         if (requester.getCompany() == null) {
             throw new ForbiddenActionException("You can only view members of your own company.");

@@ -5,6 +5,7 @@ import AppLayout, { type PageKey } from "./AppLayout";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
+import TimeWorkedPage from "./pages/TimeWorkedPage";
 import WorkplacePage from "./pages/WorkplacePage";
 import ProjectPage from "./pages/ProjectPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -59,7 +60,20 @@ function AppContent() {
     return (
       <InvitationPage
         token={view.token}
-        onGoToLogin={() => setView({ type: "auth", mode: "login" })}
+        onGoToLogin={() => {
+          // Clean the /invitations/<token> URL so a refresh doesn't land
+          // back on the (now consumed) invitation screen.
+          window.history.replaceState(null, "", "/");
+          setView({ type: "auth", mode: "login" });
+        }}
+        onRegistered={() => {
+          // Registration succeeded: clear the invitation URL and go to the
+          // dashboard. Without this the effect below (which only watches
+          // view.type === "auth") never fires and the user stays stuck on
+          // the invitation form.
+          window.history.replaceState(null, "", "/");
+          setView({ type: "app", page: "dashboard" });
+        }}
       />
     );
   }
@@ -123,6 +137,7 @@ function AppContent() {
       {view.type === "app" && view.page === "dashboard" && (
         <DashboardPage onOpenWorkplace={handleOpenWorkplace} />
       )}
+      {view.type === "app" && view.page === "hours" && <TimeWorkedPage />}
       {view.type === "app" && view.page === "invites" && <InvitesPage />}
       {view.type === "app" && view.page === "profile" && <ProfilePage />}
       {view.type === "app" && view.page === "settings" && <SettingsPage />}

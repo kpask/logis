@@ -61,7 +61,6 @@ class CompanyServiceTest {
         return company;
     }
 
-    // ── getCompanyById / getCompanyByUser ───────────────────────────────
 
     @Test
     void getCompanyById_throwsIllegalArgument_whenIdIsNullOrNotPositive() {
@@ -91,20 +90,20 @@ class CompanyServiceTest {
     }
 
     @Test
-    void getCompanyByUser_returnsResponse_whenUserHasCompany() {
+    void getCompanyForUser_returnsResponse_whenUserHasCompany() {
         when(userService.findUser(1L)).thenReturn(user(1L, CompanyRole.USER, company(10L)));
 
-        CompanyResponse response = companyService.getCompanyByUser(1L);
+        CompanyResponse response = companyService.getCompanyForUser(1L);
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.name()).isEqualTo("Acme Ltd");
     }
 
     @Test
-    void getCompanyByUser_throwsIllegalArgument_whenUserHasNoCompany() {
+    void getCompanyForUser_throwsIllegalArgument_whenUserHasNoCompany() {
         when(userService.findUser(1L)).thenReturn(user(1L, CompanyRole.USER, null));
 
-        assertThatThrownBy(() -> companyService.getCompanyByUser(1L))
+        assertThatThrownBy(() -> companyService.getCompanyForUser(1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not associated");
     }
@@ -204,15 +203,15 @@ class CompanyServiceTest {
     // ── member counts & lists ───────────────────────────────────────────
 
     @Test
-    void getWorkerCountByUser_throwsIllegalArgument_whenUserHasNoCompany() {
+    void getWorkerCountForUser_throwsIllegalArgument_whenUserHasNoCompany() {
         when(userService.findUser(1L)).thenReturn(user(1L, CompanyRole.USER, null));
 
-        assertThatThrownBy(() -> companyService.getWorkerCountByUser(1L))
+        assertThatThrownBy(() -> companyService.getWorkerCountForUser(1L))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void getMembersByUser_returnsMappedMembers_ofRequestersCompany() {
+    void getMembersForUser_returnsMappedMembers_ofRequestersCompany() {
         User requester = user(1L, CompanyRole.MANAGER, company(10L));
         User member1 = user(2L, CompanyRole.USER, requester.getCompany());
         User member2 = user(3L, CompanyRole.USER, requester.getCompany());
@@ -223,16 +222,16 @@ class CompanyServiceTest {
         when(userService.toResponse(member1)).thenReturn(resp1);
         when(userService.toResponse(member2)).thenReturn(resp2);
 
-        List<UserResponse> members = companyService.getMembersByUser(1L);
+        List<UserResponse> members = companyService.getMembersForUser(1L);
 
         assertThat(members).containsExactly(resp1, resp2);
     }
 
     @Test
-    void getMembersByUser_throwsForbidden_whenRequesterHasNoCompany() {
+    void getMembersForUser_throwsForbidden_whenRequesterHasNoCompany() {
         when(userService.findUser(1L)).thenReturn(user(1L, CompanyRole.USER, null));
 
-        assertThatThrownBy(() -> companyService.getMembersByUser(1L))
+        assertThatThrownBy(() -> companyService.getMembersForUser(1L))
                 .isInstanceOf(ForbiddenActionException.class);
     }
 

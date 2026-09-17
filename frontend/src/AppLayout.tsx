@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getInitials } from "./utils";
 import { useI18n } from "./i18n";
 import {
+  IconClock,
   IconDashboard,
   IconLogout,
   IconSettings,
@@ -11,7 +12,12 @@ import {
   IconUsers,
 } from "./components";
 
-export type PageKey = "dashboard" | "invites" | "profile" | "settings";
+export type PageKey =
+  | "dashboard"
+  | "hours"
+  | "invites"
+  | "profile"
+  | "settings";
 
 interface AppLayoutProps {
   page: PageKey;
@@ -34,6 +40,7 @@ export default function AppLayout({
 
   const navItems: { key: PageKey; labelKey: string; icon: ReactNode }[] = [
     { key: "dashboard", labelKey: "navDashboard", icon: <IconDashboard /> },
+    { key: "hours", labelKey: "navHours", icon: <IconClock /> },
     { key: "invites", labelKey: "navInvites", icon: <IconUsers /> },
     { key: "profile", labelKey: "navProfile", icon: <IconUser /> },
     { key: "settings", labelKey: "navSettings", icon: <IconSettings /> },
@@ -42,6 +49,8 @@ export default function AppLayout({
   const pageTitleKey =
     page === "dashboard"
       ? "navDashboard"
+      : page === "hours"
+      ? "navHours"
       : page === "invites"
       ? "navInvites"
       : page === "profile"

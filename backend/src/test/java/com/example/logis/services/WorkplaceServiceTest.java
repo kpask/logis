@@ -143,14 +143,14 @@ class WorkplaceServiceTest {
     }
 
     @Test
-    void getWorkplacesByUser_returnsMappedWorkplaces_ofUsersCompany() {
+    void getWorkplacesForUser_returnsMappedWorkplaces_ofUsersCompany() {
         Company company = company(10L);
         User user = user(1L, CompanyRole.USER, company);
         company.getWorkplaces().add(workplace(20L, company));
         company.getWorkplaces().add(workplace(21L, company));
         when(userService.findUser(1L)).thenReturn(user);
 
-        List<WorkplaceResponse> workplaces = workplaceService.getWorkplacesByUser(1L);
+        List<WorkplaceResponse> workplaces = workplaceService.getWorkplacesForUser(1L);
 
         assertThat(workplaces).hasSize(2);
         assertThat(workplaces).extracting(WorkplaceResponse::id)
@@ -158,38 +158,26 @@ class WorkplaceServiceTest {
     }
 
     @Test
-    void getWorkplacesByCompanyId_returnsMappedWorkplaces() {
-        Company company = company(10L);
-        company.getWorkplaces().add(workplace(20L, company));
-        when(companyService.findCompany(10L)).thenReturn(company);
-
-        List<WorkplaceResponse> workplaces = workplaceService.getWorkplacesByCompanyId(10L);
-
-        assertThat(workplaces).hasSize(1);
-        assertThat(workplaces.get(0).id()).isEqualTo(20L);
-    }
-
-    @Test
-    void getWorkplaceByWorkplaceIdAndUser_returnsWorkplace_whenUserBelongsToOwningCompany() {
+    void getWorkplaceForUser_returnsWorkplace_whenUserBelongsToOwningCompany() {
         Company company = company(10L);
         User user = user(1L, CompanyRole.USER, company);
         Workplace workplace = workplace(20L, company);
         when(userService.findUser(1L)).thenReturn(user);
         when(workplaceRepository.findById(20L)).thenReturn(Optional.of(workplace));
 
-        WorkplaceResponse response = workplaceService.getWorkplaceByWorkplaceIdAndUser(20L, 1L);
+        WorkplaceResponse response = workplaceService.getWorkplaceForUser(20L, 1L);
 
         assertThat(response.id()).isEqualTo(20L);
     }
 
     @Test
-    void getWorkplaceByWorkplaceIdAndUser_throwsForbidden_whenUserBelongsToAnotherCompany() {
+    void getWorkplaceForUser_throwsForbidden_whenUserBelongsToAnotherCompany() {
         User user = user(1L, CompanyRole.USER, company(20L));
         Workplace workplace = workplace(30L, company(10L));
         when(userService.findUser(1L)).thenReturn(user);
         when(workplaceRepository.findById(30L)).thenReturn(Optional.of(workplace));
 
-        assertThatThrownBy(() -> workplaceService.getWorkplaceByWorkplaceIdAndUser(30L, 1L))
+        assertThatThrownBy(() -> workplaceService.getWorkplaceForUser(30L, 1L))
                 .isInstanceOf(ForbiddenActionException.class)
                 .hasMessageContaining("not part of the company");
     }
@@ -205,7 +193,7 @@ class WorkplaceServiceTest {
         when(userService.findUser(1L)).thenReturn(manager);
         when(workplaceRepository.findById(20L)).thenReturn(Optional.of(workplace));
 
-        workplaceService.deleteWorkplaceByWorkplaceIdAndUser(20L, 1L);
+        workplaceService.deleteWorkplaceForUser(20L, 1L);
 
         verify(workplaceRepository).delete(workplace);
     }
@@ -217,7 +205,7 @@ class WorkplaceServiceTest {
         when(userService.findUser(1L)).thenReturn(user);
         when(workplaceRepository.findById(30L)).thenReturn(Optional.of(workplace));
 
-        assertThatThrownBy(() -> workplaceService.deleteWorkplaceByWorkplaceIdAndUser(30L, 1L))
+        assertThatThrownBy(() -> workplaceService.deleteWorkplaceForUser(30L, 1L))
                 .isInstanceOf(ForbiddenActionException.class);
 
         verify(workplaceRepository, never()).delete(any());

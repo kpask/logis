@@ -184,6 +184,8 @@ export interface TimeWorkedResponse {
   date: string;
   tracked: number | { seconds: number; nano: number } | string | null;
   worked: number | { seconds: number; nano: number } | string | null;
+  /** Distinct project names worked on that day, in first-touched order. */
+  projects: string[];
 }
 
 /** Body for starting the timer. Coordinates are optional — the backend

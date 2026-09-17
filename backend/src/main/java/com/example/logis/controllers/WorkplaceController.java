@@ -9,7 +9,7 @@ import com.example.logis.services.ProjectService;
 import com.example.logis.services.WorkplaceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,40 +24,34 @@ public class WorkplaceController {
         this.projectService = projectService;
     }
 
-    @PostMapping("/workplace")
-    public WorkplaceResponse createWorkplace(@RequestBody @Valid CreateWorkplaceRequest request, Authentication authentication){
-        Long creatorId = ((User) authentication.getPrincipal()).getId();
-        return workplaceService.createWorkplace(request, creatorId);
+    @PostMapping("/workplaces")
+    public WorkplaceResponse createWorkplace(@RequestBody @Valid CreateWorkplaceRequest request, @AuthenticationPrincipal User user){
+        return workplaceService.createWorkplace(request, user.getId());
     }
 
     @GetMapping("/workplaces")
-    public List<WorkplaceResponse> getCompanyWorkplaces(Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return workplaceService.getWorkplacesByUser(userId);
+    public List<WorkplaceResponse> getCompanyWorkplaces(@AuthenticationPrincipal User user){
+        return workplaceService.getWorkplacesForUser(user.getId());
     }
 
     @GetMapping("/workplaces/{id}")
-    public WorkplaceResponse getWorkplace(@PathVariable long id, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return workplaceService.getWorkplaceByWorkplaceIdAndUser(id, userId);
+    public WorkplaceResponse getWorkplace(@PathVariable long id, @AuthenticationPrincipal User user){
+        return workplaceService.getWorkplaceForUser(id, user.getId());
     }
 
     @GetMapping("/workplaces/{id}/projects")
-    public List<ProjectResponse> getWorkplaceProjects(@PathVariable long id, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return projectService.getWorkplaceProjectsByWorkplaceIdAndUser(id, userId);
+    public List<ProjectResponse> getWorkplaceProjects(@PathVariable long id, @AuthenticationPrincipal User user){
+        return projectService.getWorkplaceProjectsForUser(id, user.getId());
     }
 
     @PutMapping("/workplaces/{id}")
-    public WorkplaceResponse updateWorkplace(@PathVariable long id, @RequestBody @Valid UpdateWorkplaceRequest request, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        return workplaceService.updateWorkplace(id, userId, request);
+    public WorkplaceResponse updateWorkplace(@PathVariable long id, @RequestBody @Valid UpdateWorkplaceRequest request, @AuthenticationPrincipal User user){
+        return workplaceService.updateWorkplace(id, user.getId(), request);
     }
 
     @DeleteMapping("/workplaces/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteWorkplace(@PathVariable Long id, Authentication authentication){
-        Long userId = ((User) authentication.getPrincipal()).getId();
-        workplaceService.deleteWorkplaceByWorkplaceIdAndUser(id, userId);
+    public void deleteWorkplace(@PathVariable Long id, @AuthenticationPrincipal User user){
+        workplaceService.deleteWorkplaceForUser(id, user.getId());
     }
 }

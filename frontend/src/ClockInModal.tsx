@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import L from "leaflet";
+import L from "./leaflet";
 import { distanceMeters } from "./utils";
 import type { WorkplaceResponse } from "./types";
 import { useI18n } from "./i18n";

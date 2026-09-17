@@ -16,9 +16,9 @@ import com.example.logis.exceptions.ResourceNotOwnedException;
 import com.example.logis.repository.ProjectRepository;
 import com.example.logis.repository.ProjectWorkerRepository;
 import com.example.logis.util.AuthorizationHelper;
-import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -73,11 +73,11 @@ public class ProjectService {
         return projectWorkerRepository.findByProject_IdAndWorker_Id(projectId, workerId);
     }
 
-    @Transactional
-    public ProjectResponse getProjectByProjectIdAntUser(Long projectId, Long userId) {
+    @Transactional(readOnly = true)
+    public ProjectResponse getProjectForUser(Long projectId, Long userId) {
         User user = userService.findUser(userId);
         Project project = findProject(projectId);
-        if(!project.getWorkplace().getCompany().getUsers().contains(user)){
+        if(!AuthorizationHelper.isWorkplaceOwnedByCompany(project.getWorkplace(), user.getCompany())){
             throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view this project, because he is not part of the company.");
         }
         return toResponse(project);
@@ -89,12 +89,12 @@ public class ProjectService {
                 .toList();
     }
 
-    @Transactional
-    public List<ProjectResponse> getWorkplaceProjectsByWorkplaceIdAndUser(long workplaceId, Long userId) {
+    @Transactional(readOnly = true)
+    public List<ProjectResponse> getWorkplaceProjectsForUser(long workplaceId, Long userId) {
         User user = userService.findUser(userId);
         Workplace workplace = workplaceService.findWorkplace(workplaceId);
-        if(!workplace.getCompany().getUsers().contains(user)){
-            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view projects of this workplace, because he is not part of the company.");
+        if(!AuthorizationHelper.isWorkplaceOwnedByCompany(workplace, user.getCompany())){
+            throw new ForbiddenActionException("Workplace: " + workplace.getId() + " doesn't belong to User " + user.getId() + " company.");
         }
 
         if (AuthorizationHelper.isManagerOrHigherOfCompany(user, workplace.getCompany())) {
@@ -146,7 +146,7 @@ public class ProjectService {
         if(!AuthorizationHelper.isWorkplaceOwnedByCompany(project.getWorkplace(), company)){
             throw new ResourceNotOwnedException("Project does not belong to the assigner's company");
         }
-        if(worker.getCompany() == null || !worker.getCompany().getId().equals(company.getId())){
+        if(!AuthorizationHelper.isUserPartOfCompany(worker, company)){
             throw new ForbiddenActionException("Worker " + workerId + " is not part of the assigner's company");
         }
 
@@ -166,30 +166,22 @@ public class ProjectService {
         projectWorkerRepository.save(new ProjectWorker(worker, project));
     }
 
-    @Transactional
-    public List<UserResponse> getProjectWorkersByProjectIdAndUser(Long id, Long userId) {
+    @Transactional(readOnly = true)
+    public List<UserResponse> getProjectWorkers(Long projectId, Long userId) {
         User user = userService.findUser(userId);
-        Project project = findProject(id);
-        if(!project.getWorkplace().getCompany().getUsers().contains(user)){
-            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view this project, because he is not part of the company.");
+        Project project = findProject(projectId);
+        if(!AuthorizationHelper.isProjectOwnedByCompany(project, user.getCompany())){
+            throw new ForbiddenActionException("User " + user.getId() + " is not authorized to view this project.");
         }
 
-        return projectWorkerRepository.findByProject_Id(id).stream()
+        return projectWorkerRepository.findByProject_Id(projectId).stream()
                 .filter(projectWorker -> projectWorker.getEndDate() == null)
-                .map(projectWorker -> new UserResponse(
-                        projectWorker.getWorker().getId(),
-                        projectWorker.getWorker().getName(),
-                        projectWorker.getWorker().getLastname(),
-                        projectWorker.getWorker().getUsername(),
-                        projectWorker.getWorker().getEmail(),
-                        projectWorker.getWorker().getRole(),
-                        projectWorker.getWorker().getCompany().getId()
-                ))
+                .map(projectWorker -> userService.toResponse(projectWorker.getWorker()))
                 .toList();
     }
 
     @Transactional
-    public void removeWorkerByProjectIdAndWorkerIdAndUser(Long projectId, long workerId, Long requesterId) {
+    public void removeWorker(Long projectId, long workerId, Long requesterId) {
         User requester = userService.findUser(requesterId);
         Project project = findProject(projectId);
 

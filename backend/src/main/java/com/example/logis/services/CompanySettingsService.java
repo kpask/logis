@@ -33,13 +33,13 @@ public class CompanySettingsService {
                 });
     }
 
-    @Transactional
-    public CompanySettingsResponse getSettingsByUser(Long requesterId) {
+    @Transactional(readOnly = true)
+    public CompanySettingsResponse getSettingsForUser(Long requesterId) {
         return toResponse(getOrCreateForUser(requesterId));
     }
 
     @Transactional
-    public CompanySettingsResponse updateSettingsByUser(Long requesterId, UpdateCompanySettingsRequest request) {
+    public CompanySettingsResponse updateSettingsForUser(Long requesterId, UpdateCompanySettingsRequest request) {
         User requester = userService.findUser(requesterId);
         if (requester.getCompany() == null) {
             throw new ForbiddenActionException("You can only manage settings of your own company.");

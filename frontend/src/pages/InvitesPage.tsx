@@ -126,18 +126,31 @@ export default function InvitesPage() {
 
   async function copyLink(token: string) {
     const link = invitationLink(token);
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = token;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
+    // navigator.clipboard only exists in secure contexts (HTTPS / localhost),
+    // so self-hosted deployments over plain HTTP must use the fallback below.
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch {
+        copyViaExecCommand(link);
+      }
+    } else {
+      copyViaExecCommand(link);
     }
     setCopiedToken(token);
     setTimeout(() => setCopiedToken(null), 2000);
+  }
+
+  /** Fallback for non-secure contexts where the async Clipboard API is unavailable. */
+  function copyViaExecCommand(text: string) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
   }
 
   if (loading) {
@@ -175,38 +188,6 @@ export default function InvitesPage() {
                   expiry: formatDateTime(created.expiresAt),
                 })}
               </Alert>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "center",
-                  marginTop: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <code
-                  style={{
-                    flex: 1,
-                    minWidth: 240,
-                    padding: "8px 12px",
-                    background: "var(--color-bg-muted, #f5f5f5)",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    wordBreak: "break-all",
-                  }}
-                >
-                  {invitationLink(created.token)}
-                </code>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => copyLink(created.token)}
-                >
-                  {copiedToken === created.token
-                    ? t("invitesCopied")
-                    : t("invitesCopyLink")}
-                </button>
-              </div>
             </div>
           )}
 

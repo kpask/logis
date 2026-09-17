@@ -5,8 +5,10 @@ import com.example.logis.data.enums.CompanyRole;
 import com.example.logis.data.enums.TimeEntryLogStatus;
 import com.example.logis.dtos.requests.CreateTimeEntryRequest;
 import com.example.logis.dtos.requests.StartTimeEntryRequest;
+import com.example.logis.dtos.responses.CompanySettingsResponse;
 import com.example.logis.dtos.responses.TimeEntryResponse;
 import com.example.logis.dtos.requests.UpdateTimeEntryRequest;
+import com.example.logis.dtos.responses.TimeWorkedResponse;
 import com.example.logis.exceptions.ForbiddenActionException;
 import com.example.logis.repository.TimeTrackingRepository;
 import org.junit.jupiter.api.Test;
@@ -17,8 +19,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -572,5 +576,44 @@ class TimeTrackingServiceTest {
         assertThatThrownBy(() -> timeTrackingService.deleteTimeEntry(50L, 1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Stop the running timer");
+    }
+    
+    @Test
+    void getCompanyTimeWorked_returnsEveryMembersRows_forManager() {
+        Company company = company(10L);
+        User manager = manager(1L, company);
+        User worker = member(2L, company);
+        Project project = project(30L, workplace(20L, company));
+        TimeEntry workerEntry = timeEntry(50L, projectWorker(40L, worker, project, null), START, END);
+        TimeEntry managerEntry = timeEntry(51L, projectWorker(41L, manager, project, null), START, END);
+        when(userService.findUser(1L)).thenReturn(manager);
+        when(timeTrackingRepository.findAllByCompanyId(10L)).thenReturn(List.of(workerEntry, managerEntry));
+        when(companySettingsService.getSettingsForUser(1L)).thenReturn(settings(30L));
+        when(companySettingsService.getSettingsForUser(2L)).thenReturn(settings(30L));
+
+        List<TimeWorkedResponse> rows = timeTrackingService.getCompanyTimeWorked(1L, null, null);
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(TimeWorkedResponse::userId).containsExactlyInAnyOrder(1L, 2L);
+        assertThat(rows).allSatisfy(row -> {
+            assertThat(row.date()).isEqualTo(LocalDate.of(2026, 1, 1));
+            assertThat(row.tracked()).isEqualTo(Duration.ofHours(2));
+            assertThat(row.worked()).isEqualTo(Duration.ofHours(1).plusMinutes(30)); // 2h minus 30m lunch
+        });
+    }
+
+    @Test
+    void getCompanyTimeWorked_throwsForbidden_forRegularUser() {
+        Company company = company(10L);
+        User worker = member(2L, company);
+        when(userService.findUser(2L)).thenReturn(worker);
+
+        assertThatThrownBy(() -> timeTrackingService.getCompanyTimeWorked(2L, null, null))
+                .isInstanceOf(ForbiddenActionException.class)
+                .hasMessageContaining("Only managers");
+    }
+
+    private static CompanySettingsResponse settings(long lunchMinutes) {
+        return new CompanySettingsResponse(lunchMinutes, LocalTime.of(8, 0), LocalTime.of(16, 30));
     }
 }

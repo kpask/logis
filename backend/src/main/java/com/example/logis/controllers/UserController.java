@@ -10,7 +10,7 @@ import com.example.logis.services.UserSettingsService;
 import jakarta.validation.Valid;
 
 import com.example.logis.services.UserService;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,26 +23,22 @@ public class UserController {
     }
 
     @GetMapping("/user/{id}")
-    public UserResponse getUser(@PathVariable Long id, Authentication authentication){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return userService.getUserByIdAndUser(id, requesterId);
+    public UserResponse getUser(@PathVariable Long id, @AuthenticationPrincipal User user){
+        return userService.getUserByIdAndUser(id, user.getId());
     }
 
-    @PutMapping("/user/")
-    public UserResponse updateUser(Authentication authentication, @RequestBody UpdateUserRequest request){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return userService.updateUser(requesterId, request);
+    @PutMapping("/user")
+    public UserResponse updateUser(@AuthenticationPrincipal User user, @RequestBody UpdateUserRequest request){
+        return userService.updateUser(user.getId(), request);
     }
 
     @GetMapping("/me/settings")
-    public UserSettingsResponse getUserSettings(Authentication authentication){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return userSettingsService.getSettingsByUser(requesterId);
+    public UserSettingsResponse getUserSettings(@AuthenticationPrincipal User user){
+        return userSettingsService.getSettingsForUser(user.getId());
     }
 
     @PutMapping("/me/settings")
-    public UserSettingsResponse updateUserSettings(Authentication authentication, @RequestBody @Valid UpdateUserSettingsRequest request){
-        Long requesterId = ((User) authentication.getPrincipal()).getId();
-        return userSettingsService.updateSettingsByUser(requesterId, request);
+    public UserSettingsResponse updateUserSettings(@AuthenticationPrincipal User user, @RequestBody @Valid UpdateUserSettingsRequest request){
+        return userSettingsService.updateSettingsForUser(user.getId(), request);
     }
 }

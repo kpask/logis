@@ -23,6 +23,9 @@ import java.util.*;
 
 @Service
 public class TimeTrackingService {
+    /** The company timezone used for all calendar-day grouping (matches the frontend). */
+    public static final ZoneId WORK_ZONE = ZoneId.of("Europe/Vilnius");
+
     private final TimeTrackingRepository timeTrackingRepository;
     private final ProjectService projectService;
     private final WorkplaceService workplaceService;
@@ -90,6 +93,9 @@ public class TimeTrackingService {
 
         timeEntry.setEndTime(Instant.now());
         TimeEntry savedTimeEntry = timeTrackingRepository.save(timeEntry);
+        if(savedTimeEntry.getEndTime().minusSeconds(60).isBefore(savedTimeEntry.getStartTime())){
+            timeTrackingRepository.delete(savedTimeEntry);
+        }
         return toResponse(savedTimeEntry);
     }
 
@@ -134,7 +140,7 @@ public class TimeTrackingService {
             throw new ForbiddenActionException("You are not authorized to view time entries for this project.");
         }
 
-        if(!project.getWorkplace().getCompany().getUsers().contains(requester)){
+        if(!AuthorizationHelper.isProjectOwnedByCompany(project, requester.getCompany())){
             throw new ForbiddenActionException("This project is not part of your company.");
         }
         if(!requester.getRole().equals(CompanyRole.USER)){
@@ -176,8 +182,8 @@ public class TimeTrackingService {
     public List<TimeEntryResponse> getWorkplaceTimeEntries(long workplaceId, Long requesterId) {
         User requester = userService.findUser(requesterId);
         Workplace workplace = workplaceService.findWorkplace(workplaceId);
-        if (!workplace.getCompany().getUsers().contains(requester)) {
-            throw new ForbiddenActionException("You are not a member of this company.");
+        if (!AuthorizationHelper.isWorkplaceOwnedByCompany(workplace, requester.getCompany())) {
+            throw new ForbiddenActionException("User " + requester.getId() + " is not a member of the company that owns workplace " + workplace.getId());
         }
 
         if (AuthorizationHelper.isManagerOrHigherOfCompany(requester, workplace.getCompany())) {
@@ -302,6 +308,23 @@ public class TimeTrackingService {
         return calculateTimeWorkedForUsers(timeEntries);
     }
 
+    @Transactional(readOnly = true)
+    public List<TimeWorkedResponse> getCompanyTimeWorked(long requesterId, Instant from, Instant to) {
+        User requester = userService.findUser(requesterId);
+
+        if (!AuthorizationHelper.isManagerOrHigherOfCompany(requester, requester.getCompany())) {
+            throw new ForbiddenActionException("Only managers can view company-wide worked time.");
+        }
+
+        List<TimeEntry> entries = timeTrackingRepository
+                .findAllByCompanyId(requester.getCompany().getId())
+                .stream()
+                .filter(t -> inRange(t, from, to))
+                .toList();
+
+        return calculateTimeWorkedForUsers(entries);
+    }
+
     @Transactional
     public List<TimeWorkedResponse> getProjectTimeWorked(long projectId, Long userId) {
         User user = userService.findUser(userId);
@@ -334,7 +357,7 @@ public class TimeTrackingService {
 
         for (var entry : entriesByUser.entrySet()) {
             long userId = entry.getKey();
-            long lunchLength = companySettingsService.getSettingsByUser(userId).defaultLunchLength();
+            long lunchLength = companySettingsService.getSettingsForUser(userId).defaultLunchLength();
             result.addAll(calculateTimeWorkedForUser(entry.getValue(), lunchLength, userId));
         }
 
@@ -342,27 +365,33 @@ public class TimeTrackingService {
     }
 
     private List<TimeWorkedResponse> calculateTimeWorkedForUser(List<TimeEntry> entries, long lunchLength, Long userId) {
-        ZoneId zone = ZoneId.of("Europe/Vilnius");
+        ZoneId zone = WORK_ZONE;
         entries.sort(Comparator.comparing(TimeEntry::getStartTime));
 
         List<TimeWorkedResponse> result = new ArrayList<>();
         LocalDate currentDate = null;
         Duration tracked = Duration.ZERO;
+        Set<String> dayProjects = new LinkedHashSet<>();
 
         for (TimeEntry entry : entries) {
             LocalDate date = entry.getStartTime().atZone(zone).toLocalDate();
 
             if (currentDate != null && !date.equals(currentDate)) {
-                result.add(createResponse(currentDate, tracked, lunchLength, userId));
+                result.add(createResponse(currentDate, tracked, dayProjects, lunchLength, userId));
                 tracked = Duration.ZERO;
+                dayProjects = new LinkedHashSet<>();
             }
 
             currentDate = date;
             tracked = tracked.plus(entry.getDuration());
+            String projectName = entry.getProjectWorker().getProject().getProjectName();
+            if (projectName != null) {
+                dayProjects.add(projectName);
+            }
         }
 
         if (currentDate != null) {
-            result.add(createResponse(currentDate, tracked, lunchLength, userId));
+            result.add(createResponse(currentDate, tracked, dayProjects, lunchLength, userId));
         }
 
         return result;
@@ -377,12 +406,13 @@ public class TimeTrackingService {
         return 2 * earthRadius * Math.asin(Math.sqrt(a));
     }
 
-    private TimeWorkedResponse createResponse(LocalDate date, Duration tracked, long lunchLength, Long userId) {
+    private TimeWorkedResponse createResponse(LocalDate date, Duration tracked, Set<String> projects, long lunchLength, Long userId) {
         return new TimeWorkedResponse(
                 userId,
                 date,
                 tracked,
-                tracked.compareTo(Duration.ofMinutes(lunchLength)) > 0 ? tracked.minusMinutes(lunchLength) : tracked
+                tracked.compareTo(Duration.ofMinutes(lunchLength)) > 0 ? tracked.minusMinutes(lunchLength) : tracked,
+                List.copyOf(projects)
         );
     }
 

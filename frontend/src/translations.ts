@@ -44,7 +44,50 @@ export const translations = {
   navInvites: { EN: "Invites", LT: "Pakvietimai" },
   navProfile: { EN: "Profile", LT: "Profilis" },
   navSettings: { EN: "Settings", LT: "Nustatymai" },
+  navHours: { EN: "Hours", LT: "Valandos" },
   signOut: { EN: "Sign out", LT: "Atsijungti" },
+
+  hoursTitle: { EN: "Work hours", LT: "Darbo valandos" },
+  hoursSubtitle: {
+    EN: "Your tracked time, monthly overview and exports.",
+    LT: "Jūsų registruotas laikas, mėnesio apžvalga ir eksportas.",
+  },
+  hoursLoading: { EN: "Loading work hours…", LT: "Įkeliamos darbo valandos…" },
+  hoursMonthlyTitle: { EN: "Last 12 months", LT: "Paskutiniai 12 mėnesių" },
+  hoursNoCompanyTitle: {
+    EN: "Join a company to track hours",
+    LT: "Prisijunkite prie kompanijos, kad matytumėte valandas",
+  },
+  hoursNoCompanyDesc: {
+    EN: "Once you accept an invitation and join a company, your work hours will appear here.",
+    LT: "Priėmę kvietimą ir prisijungę prie kompanijos, čia matysite savo darbo valandas.",
+  },
+  hoursNoDataTitle: { EN: "No hours yet", LT: "Dar nėra valandų" },
+  hoursNoDataDesc: {
+    EN: "Start a timer on a project to see your statistics here.",
+    LT: "Paleiskite laikmatį projekte, kad čia matytumėte statistiką.",
+  },
+  hoursPrevMonth: { EN: "Previous month", LT: "Ankstesnis mėnuo" },
+  hoursNextMonth: { EN: "Next month", LT: "Kitas mėnuo" },
+  hoursNoMonthDataTitle: {
+    EN: "Nothing logged this month",
+    LT: "Šį mėnesį nieko neužregistruota",
+  },
+  hoursNoMonthDataDesc: {
+    EN: "Logged work for the selected month will appear here.",
+    LT: "Pasirinkto mėnesio darbo įrašai čia pasirodys.",
+  },
+  colDate: { EN: "Date", LT: "Data" },
+  colTracked: { EN: "Tracked", LT: "Registruota" },
+  hoursTotal: { EN: "Total", LT: "Iš viso" },
+  hoursExportAll: {
+    EN: "Export all recorded time:",
+    LT: "Eksportuoti visą registruotą laiką:",
+  },
+  hoursExportPdf: { EN: "Export PDF", LT: "Eksportuoti PDF" },
+  hoursExportCsv: { EN: "Export CSV", LT: "Eksportuoti CSV" },
+  hoursExporting: { EN: "Preparing export…", LT: "Ruošiamas eksportas…" },
+  hoursUnknownUser: { EN: "User {id}", LT: "Vartotojas {id}" },
   welcomeUser: { EN: "Welcome, {name}", LT: "Sveiki, {name}" },
 
   // ── Login Page ─────────────────────────────────────────────
@@ -844,9 +887,9 @@ export const translations = {
 
   // ── Form Placeholders ────────────────────────────────────────
   loginEmailPlaceholder: { EN: "you@company.com", LT: "jus@imone.lt" },
-  signupNamePlaceholder: { EN: "Karolis", LT: "Karolis" },
-  signupLastNamePlaceholder: { EN: "Petrauskas", LT: "Petrauskas" },
-  signupUsernamePlaceholder: { EN: "karolis", LT: "karolis" },
+  signupNamePlaceholder: { EN: "Jonas", LT: "Jonas" },
+  signupLastNamePlaceholder: { EN: "Smith", LT: "Kazlauskas" },
+  signupUsernamePlaceholder: { EN: "jonas", LT: "jonas" },
   signupEmailPlaceholder: { EN: "you@company.com", LT: "jus@imone.lt" },
   invitesEmailPlaceholder: {
     EN: "colleague@company.com",
